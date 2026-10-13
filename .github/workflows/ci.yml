@@ -1,0 +1,45 @@
+name: Native verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: fedora / x64
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    timeout-minutes: 25
+    steps:
+      - name: Install native verification tools
+        run: >-
+          dnf install -y git clang clang-tools-extra cmake ninja-build glslc pkgconf-pkg-config
+          SDL3-devel SDL3_ttf-devel SDL3_image-devel libpng-devel libwebp-devel libjpeg-turbo
+          libX11-devel mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth which
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure with Clang and Ninja
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/ci --parallel 2
+      - name: Format
+        run: clang-format --dry-run --Werror $(find include src tests -name '*.hpp' -o -name '*.cpp')
+      - name: Tidy
+        run: clang-tidy -p build/ci --quiet $(find src tests -name '*.cpp')
+      - name: Test on lavapipe
+        env:
+          VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+        run: xvfb-run -a ctest --test-dir build/ci --output-on-failure
