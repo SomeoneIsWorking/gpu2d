@@ -115,6 +115,13 @@ void resizes() {
   expect(half.rgba[right] < 50 && half.rgba[right + 2] > 200, "the right stays blue");
   expect(gpu2d::image::resized(source, 0, 4).empty(), "a zero size gives nothing");
 
+  // One white column on black, between the pixels a two-tap filter would read at an eighth.
+  Bitmap line{.width = 16, .height = 1, .rgba = std::vector<std::uint8_t>(64, 0)};
+  line.rgba[line.offset(7, 0)] = 255;
+  const Bitmap eighth = gpu2d::image::resized(line, 2, 1);
+  const int kept = eighth.rgba[0] + eighth.rgba[eighth.offset(1, 0)];
+  expect(kept > 24 && kept < 40, "a reduction averages every pixel it covers");
+
   const Bitmap wide{.width = 40, .height = 10, .rgba = std::vector<std::uint8_t>(1600, 255)};
   const Bitmap fitted = gpu2d::image::fittedWithin(wide, 20);
   expect(fitted.width == 20 && fitted.height == 5, "fitting scales the longest side down");
