@@ -2,6 +2,7 @@
 // the line box says, and letter spacing widens a label by one spacing per character.
 #include "gpu2d/text.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 
@@ -84,6 +85,41 @@ void spacingMovesGlyphs(GpuFixture &gpu, Text &text) {
          "spacing opens between the characters");
 }
 
+void inkMatchesWhatIsDrawn(GpuFixture &gpu, Text &text) {
+  const TextStyle style{.size = 24.0f, .tracking = 0.0f};
+  const gpu2d::GlyphInk ink = text.ink(U'o', 24.0f);
+  expect(ink.right > ink.left && ink.top > ink.bottom && ink.bottom >= -1.0f,
+         "a lowercase o inks a box sitting on the baseline");
+  const gpu2d::GlyphInk dash = text.ink(U'-', 24.0f);
+  expect(dash.bottom > ink.bottom && dash.top < text.ink(U'H', 24.0f).top,
+         "a dash inks between the baseline and the capital height");
+  const float ascent = text.metrics(24.0f).ascent;
+  const auto frame = gpu.draw([&](Canvas &canvas) {
+    expect(text.draw(canvas, "o", Point{10.0f, 10.0f}, style, Colour{255, 255, 255, 255}),
+           "the glyph shapes");
+  });
+  text.retire();
+  int left = 64;
+  int right = 0;
+  int top = 64;
+  int bottom = 0;
+  for (int y = 0; y < 64; ++y) {
+    for (int x = 0; x < 64; ++x) {
+      if (at(frame, x, y).a > 64) {
+        left = std::min(left, x);
+        right = std::max(right, x + 1);
+        top = std::min(top, y);
+        bottom = std::max(bottom, y + 1);
+      }
+    }
+  }
+  const float baseline = 10.0f + ascent;
+  near(static_cast<float>(left), 10.0f + ink.left, "the ink starts where its box says", 1.5);
+  near(static_cast<float>(right), 10.0f + ink.right, "and ends there", 1.5);
+  near(static_cast<float>(top), baseline - ink.top, "its top is the box's", 1.5);
+  near(static_cast<float>(bottom), baseline - ink.bottom, "and its bottom", 1.5);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -97,6 +133,7 @@ int main(int argc, char **argv) {
   measures(text);
   draws(gpu, text);
   spacingMovesGlyphs(gpu, text);
+  inkMatchesWhatIsDrawn(gpu, text);
   std::printf("text: all checks passed\n");
   return 0;
 }

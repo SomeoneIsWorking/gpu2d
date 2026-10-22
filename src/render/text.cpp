@@ -80,6 +80,21 @@ LineMetrics Text::metrics(float size) {
                      static_cast<float>(-TTF_GetFontDescent(face))};
 }
 
+GlyphInk Text::ink(char32_t codepoint, float size) {
+  TTF_Font *face = font(size);
+  int minX = 0;
+  int maxX = 0;
+  int minY = 0;
+  int maxY = 0;
+  int advance = 0;
+  if (face == nullptr || !TTF_GetGlyphMetrics(face, static_cast<Uint32>(codepoint), &minX, &maxX,
+                                              &minY, &maxY, &advance)) {
+    return {};
+  }
+  return GlyphInk{static_cast<float>(minX), static_cast<float>(maxX), static_cast<float>(minY),
+                  static_cast<float>(maxY)};
+}
+
 float Text::measure(std::string_view text, const TextStyle &style) {
   TTF_Font *face = font(style.size);
   int width = 0;

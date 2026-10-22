@@ -51,6 +51,21 @@ struct LineMetrics {
   }
 };
 
+/// A glyph's ink box at one size, in pixels from the pen on the baseline, y growing up.
+struct GlyphInk {
+  float left{};
+  float right{};
+  float bottom{};
+  float top{};
+
+  [[nodiscard]] float centreX() const noexcept {
+    return (left + right) * 0.5f;
+  }
+  [[nodiscard]] float centreY() const noexcept {
+    return (bottom + top) * 0.5f;
+  }
+};
+
 class Text {
 public:
   /// Reads `face` and starts the GPU text engine; throws GpuError when either fails.
@@ -62,6 +77,9 @@ public:
   Text &operator=(Text &&) = delete;
 
   [[nodiscard]] LineMetrics metrics(float size);
+  /// Where `codepoint`'s outline inks at `size`; all zero for a glyph with no ink or one the
+  /// face cannot load.
+  [[nodiscard]] GlyphInk ink(char32_t codepoint, float size);
   /// The width `text` advances, letter spacing included.
   [[nodiscard]] float measure(std::string_view text, const TextStyle &style);
   /// Draws `text` with the top of its line box at `topLeft.y`, starting at `topLeft.x`; false
