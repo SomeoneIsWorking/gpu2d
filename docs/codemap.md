@@ -23,7 +23,7 @@ library itself never logs.
 | GPU object ownership | `include/gpu2d/gpu_handle.hpp`, `include/gpu2d/gpu_error.hpp`, `src/render/gpu_error.cpp` | RAII handles for SDL GPU objects; the exception carrying SDL's reason |
 | Textures | `include/gpu2d/texture.hpp`, `src/render/texture.cpp` | Upload from RGBA (mipmapped when trilinear) and `TextureView` |
 | Render targets | `include/gpu2d/render_target.hpp`, `include/gpu2d/surface.hpp`, `src/render/render_target.cpp` | Offscreen RGBA8 targets, sampled or read back into a `Bitmap` |
-| Text | `include/gpu2d/text.hpp`, `src/render/text.cpp` | SDL3_ttf GPU text engine: metrics, measuring, drawing with letter spacing, cached shaped runs retired after submit |
+| Text | `include/gpu2d/text.hpp`, `src/render/text.cpp` | SDL3_ttf GPU text engine: metrics, glyph ink bounds, measuring, drawing with letter spacing, cached shaped runs retired after submit |
 | Shader build | `cmake/Gpu2dShaders.cmake` | `gpu2d_compile_shaders(target ...)`: glslc to SPIR-V word lists included by the C++; consumers may reuse it |
 | Tests | `tests/` | `image_test` (PNG round trip, WebP/JPEG decode, refusals, resize), `canvas_test` and `text_test` (pixels drawn offscreen behind a hidden window and read back) |
 | CI | `.github/workflows/ci.yml` | Fedora container, Clang and Ninja, CTest on Mesa's lavapipe |
