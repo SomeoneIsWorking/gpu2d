@@ -87,11 +87,11 @@ void spacingMovesGlyphs(GpuFixture &gpu, Text &text) {
 
 void inkMatchesWhatIsDrawn(GpuFixture &gpu, Text &text) {
   const TextStyle style{.size = 24.0f, .tracking = 0.0f};
-  const gpu2d::GlyphInk ink = text.ink(U'o', 24.0f);
+  const gpu2d::GlyphInk ink = text.ink(U'o', style);
   expect(ink.right > ink.left && ink.top > ink.bottom && ink.bottom >= -1.0f,
          "a lowercase o inks a box sitting on the baseline");
-  const gpu2d::GlyphInk dash = text.ink(U'-', 24.0f);
-  expect(dash.bottom > ink.bottom && dash.top < text.ink(U'H', 24.0f).top,
+  const gpu2d::GlyphInk dash = text.ink(U'-', style);
+  expect(dash.bottom > ink.bottom && dash.top < text.ink(U'H', style).top,
          "a dash inks between the baseline and the capital height");
   const float ascent = text.metrics(24.0f).ascent;
   const auto frame = gpu.draw([&](Canvas &canvas) {

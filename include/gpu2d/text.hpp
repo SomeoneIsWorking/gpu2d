@@ -77,9 +77,9 @@ public:
   Text &operator=(Text &&) = delete;
 
   [[nodiscard]] LineMetrics metrics(float size);
-  /// Where `codepoint`'s outline inks at `size`; all zero for a glyph with no ink or one the
-  /// face cannot load.
-  [[nodiscard]] GlyphInk ink(char32_t codepoint, float size);
+  /// Where `codepoint`'s outline inks at the style's size; all zero for a glyph with no ink or
+  /// one the face cannot load.
+  [[nodiscard]] GlyphInk ink(char32_t codepoint, const TextStyle &style);
   /// The width `text` advances, letter spacing included.
   [[nodiscard]] float measure(std::string_view text, const TextStyle &style);
   /// Draws `text` with the top of its line box at `topLeft.y`, starting at `topLeft.x`; false
