@@ -12,7 +12,8 @@ library itself never logs.
 | Image decoding | `include/gpu2d/image/decode.hpp`, `src/image/decode.cpp` | PNG, JPEG, WebP (anything SDL3_image reads) from a file or memory into a `Bitmap` |
 | Image resizing | `include/gpu2d/image/resize.hpp`, `src/image/resize.cpp` | Cubic `resized` (Mitchell down, Catmull-Rom up) and aspect-keeping `fittedWithin` |
 | PNG encoding | `include/gpu2d/image/png_encoder.hpp`, `src/image/png_encoder.cpp` | RGBA to PNG bytes in memory through libpng |
-| Window and device | `include/gpu2d/gpu_window.hpp`, `src/render/gpu_window.cpp` | X11 SDL window on a 32-bit visual plus the Vulkan `SDL_GPUDevice` claiming it; hidden mode (unmapped, no vsync); swapchain acquire; X11 window id |
+| Window and device | `include/gpu2d/gpu_window.hpp`, `src/render/gpu_window.cpp` | SDL window plus the Vulkan `SDL_GPUDevice` claiming it; hidden mode (unmapped, no vsync); swapchain acquire; X11 window id |
+| Window platform | `src/render/window_platform.hpp`, `window_platform_x11.cpp` (Linux and other X11 systems), `window_platform_default.cpp` (elsewhere), picked in `CMakeLists.txt` | SDL hints before video starts: X11 driver and 32-bit ARGB visual (translucent window), or an opaque window |
 | Canvas | `include/gpu2d/canvas.hpp`, `src/render/canvas.cpp` | Drawing API, transform and clip stacks, blend modes, passes per target, batching, blur strips, `submit` |
 | Pipelines | `include/gpu2d/pipeline.hpp`, `src/render/pipeline.cpp` | Shaders from embedded SPIR-V; one pipeline per (target format, blend mode) |
 | SDF shapes | `include/gpu2d/shape_pipeline.hpp`, `src/render/shape_pipeline.cpp`, `src/shaders/shape.*` | Rounded boxes (filled or stroked) and arcs, one instanced quad each, records in a storage buffer |

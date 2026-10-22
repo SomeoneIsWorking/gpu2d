@@ -1,7 +1,8 @@
-// gpu_window — an SDL window and the SDL GPU device (Vulkan) that draws into it, made and claimed
-// together. Always X11 (overlay properties such as Gamescope's are X11 window properties), on a
-// 32-bit visual where the server has one, so the window's premultiplied alpha is what a compositor
-// blends with what lies below. Hidden is an unmapped window that presents without vsync.
+// gpu_window — an SDL window and the SDL GPU device (Vulkan) that draws into it, made and
+// claimed together. Where windows are X11's it is always X11 (overlay properties such as
+// Gamescope's are X11 window properties), on a 32-bit visual where the server has one, so the
+// window's premultiplied alpha is what a compositor blends with what lies below; elsewhere it
+// is opaque (`window_platform`). Hidden is an unmapped window that presents without vsync.
 #pragma once
 
 #include <cstdint>
@@ -50,11 +51,11 @@ public:
   /// SDL's GPU driver, "vulkan".
   [[nodiscard]] std::string driver() const;
   /// Whether the window has a 32-bit visual, so its alpha reaches the compositor; false when
-  /// the X server has none and the window is opaque.
+  /// the X server has none or the platform is not X11, and the window is opaque.
   [[nodiscard]] bool translucent() const noexcept {
     return translucent_;
   }
-  /// The X11 window id, for window properties such as Gamescope's overlay.
+  /// The X11 window id, for window properties such as Gamescope's overlay; 0 outside X11.
   [[nodiscard]] std::uint64_t x11Window() const;
   /// The present mode in use: immediate (or mailbox) when hidden, vsync when shown.
   [[nodiscard]] SDL_GPUPresentMode presentMode() const noexcept {

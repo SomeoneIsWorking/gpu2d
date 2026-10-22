@@ -1,16 +1,13 @@
 #include "gpu2d/gpu_window.hpp"
 
 #include <array>
-#include <memory>
 #include <string>
 
-#include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_properties.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
 
 #include "gpu2d/gpu_error.hpp"
+#include "window_platform.hpp"
 
 namespace gpu2d {
 namespace {
@@ -29,36 +26,11 @@ SDL_GPUPresentMode choosePresentMode(SDL_GPUDevice *device, SDL_Window *window, 
   return SDL_GPU_PRESENTMODE_VSYNC;
 }
 
-struct DisplayClose {
-  void operator()(Display *display) const noexcept {
-    XCloseDisplay(display);
-  }
-};
-
-/// A 32-bit TrueColor visual's id, or nothing when the X server has none. SDL GPU refuses
-/// SDL_WINDOW_TRANSPARENT, and SDL gives a window without it the default 24-bit visual; on an
-/// ARGB visual Mesa's swapchain inherits the window's alpha instead.
-std::optional<std::string> argbVisual() {
-  const std::unique_ptr<Display, DisplayClose> display{XOpenDisplay(nullptr)};
-  if (display == nullptr) {
-    return std::nullopt;
-  }
-  XVisualInfo visual{};
-  if (XMatchVisualInfo(display.get(), DefaultScreen(display.get()), 32, TrueColor, &visual) == 0) {
-    return std::nullopt;
-  }
-  return std::to_string(visual.visualid);
-}
-
 } // namespace
 
 GpuWindow::GpuWindow(const WindowOptions &options) {
   try {
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
-    if (const std::optional<std::string> visual = argbVisual()) {
-      SDL_SetHint(SDL_HINT_VIDEO_X11_WINDOW_VISUALID, visual->c_str());
-      translucent_ = true;
-    }
+    translucent_ = window_platform::prepareWindow();
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
       throw GpuError{"cannot start SDL video"};
     }
