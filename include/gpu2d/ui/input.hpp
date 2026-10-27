@@ -27,6 +27,10 @@ enum class Action : std::uint8_t {
   NextTab,
   /// The app's menu button.
   Menu,
+  /// The focused thing's own menu (a View or Select button, a right click).
+  Options,
+  /// The app's search.
+  Search,
   /// Removes the character before the caret of the field being typed in (Backspace).
   Erase,
   /// Done with the line being typed (Enter, or an on-screen keyboard's Done).
@@ -39,6 +43,10 @@ enum class PointerKind : std::uint8_t {
   Press,
   /// Wheel notches in `wheel`, positive away from the player.
   Wheel,
+  /// The secondary button went down: the menu of what it is on.
+  Context,
+  /// The pointer left the window, or stopped driving it.
+  Leave,
 };
 
 struct PointerEvent {

@@ -33,6 +33,8 @@ constexpr float chipHeightDp = 26.0f;
 constexpr float chipMaxWidthDp = 220.0f;
 /// A caret's width, in dp, and the seconds it shows and hides in.
 constexpr float caretDp = 2.0f;
+/// What a masked field draws for each character.
+constexpr std::string_view maskDot = "\xE2\x80\xA2";
 constexpr double caretSeconds = 0.5;
 /// Glyphs in the hint bar against the hint text size.
 constexpr float glyphShare = 1.55f;
@@ -67,6 +69,21 @@ void tick(const Painter &painter, const Rect &box, Colour colour) {
 
 float rowRadius(const Theme &theme) {
   return theme.px(theme.shape.radius);
+}
+
+/// The width a chevron takes in a row's end with its gaps, in pixels.
+float chevronZone(const Theme &theme) {
+  return theme.px(chevronDp * 2.0f + theme.spacing.gap * 2.0f);
+}
+
+/// `text` fitted to an end `end` wide beside `beside` pixels of chevrons, compared as the same sum
+/// the end was sized from so a value that set the width is never cut by float rounding.
+std::string fittedBeside(Typesetter &typesetter, std::string_view text, float end, float beside,
+                         float size) {
+  if (typesetter.measure(text, size) + beside <= end) {
+    return std::string{text};
+  }
+  return fitted(typesetter, text, std::max(0.0f, end - beside), size);
 }
 
 } // namespace
@@ -227,10 +244,29 @@ std::string TextField::drawn() const {
   for (const char byte : text_) {
     // One dot for each byte that starts a UTF-8 character.
     if ((static_cast<unsigned char>(byte) & 0xC0U) != 0x80U) {
-      dots += "\xE2\x80\xA2";
+      dots += maskDot;
     }
   }
   return dots;
+}
+
+void TextField::edit() {
+  if (editing_ || state_ == nullptr) {
+    return;
+  }
+  editing_ = true;
+  caret_ = text_.size();
+  state_->editing = id();
+  state_->caret = caret_;
+}
+
+void TextField::change(std::string next, std::size_t at) {
+  if (state_ != nullptr) {
+    state_->caret = at;
+  }
+  if (changed_) {
+    changed_(std::move(next));
+  }
 }
 
 Size TextField::measure(LayoutContext &context, float maxWidth) {
@@ -240,13 +276,29 @@ Size TextField::measure(LayoutContext &context, float maxWidth) {
 
 void TextField::arrange(LayoutContext &context, const Rect &frame) {
   frame_ = frame;
+  state_ = &context.state;
+  editing_ = !id().empty() && context.state.editing == id() && context.state.focused == id();
+  caret_ = editing_ ? characterStart(text_, context.state.caret) : text_.size();
   const Theme &theme = context.theme;
   const float room = std::max(0.0f, frame.width - 2.0f * theme.px(theme.spacing.pad));
   labelShown_ = fitted(context.text, label_, room, theme.px(theme.type.caption));
+  if (text_.empty()) {
+    lineShown_ = fitted(context.text, placeholder_, room, theme.px(theme.type.body));
+    caretShown_ = 0;
+    return;
+  }
+  std::size_t at = caret_;
+  if (masked_) {
+    at = 0;
+    for (std::size_t i = 0; i < caret_; i = nextCharacter(text_, i)) {
+      at += maskDot.size();
+    }
+  }
   const float caret = theme.px(caretDp + theme.spacing.gap);
-  lineShown_ = text_.empty() ? fitted(context.text, placeholder_, room, theme.px(theme.type.body))
-                             : fittedEnd(context.text, drawn(), std::max(0.0f, room - caret),
-                                         theme.px(theme.type.body));
+  FittedAt shown = fittedAround(context.text, drawn(), at, std::max(0.0f, room - caret),
+                                theme.px(theme.type.body));
+  lineShown_ = std::move(shown.text);
+  caretShown_ = shown.at;
 }
 
 float TextField::cornerRadius(const Theme &theme) const {
@@ -256,27 +308,40 @@ float TextField::cornerRadius(const Theme &theme) const {
 bool TextField::act(Action action, ActContext &context) {
   switch (action) {
   case Action::Accept:
+    edit();
     context.openKeyboard();
     return true;
   case Action::Erase: {
-    if (text_.empty()) {
+    edit();
+    if (caret_ == 0) {
       return true;
     }
-    std::string next{text_.substr(0, characterStart(text_, text_.size() - 1))};
-    if (changed_) {
-      changed_(std::move(next));
-    }
+    const std::size_t from = characterStart(text_, caret_ - 1);
+    std::string next{text_};
+    next.erase(from, caret_ - from);
+    change(std::move(next), from);
     return true;
   }
+  case Action::Left:
+  case Action::Right:
+    if (!editing_) {
+      return false;
+    }
+    if (state_ != nullptr) {
+      state_->caret = action == Action::Left ? (caret_ == 0 ? 0 : characterStart(text_, caret_ - 1))
+                                             : nextCharacter(text_, caret_);
+    }
+    return true;
   case Action::Tertiary:
     if (text_.empty()) {
       return false;
     }
-    if (changed_) {
-      changed_({});
-    }
+    change({}, 0);
     return true;
   case Action::Submit:
+    if (state_ != nullptr) {
+      state_->editing.clear();
+    }
     if (!submitted_) {
       return false;
     }
@@ -288,16 +353,13 @@ bool TextField::act(Action action, ActContext &context) {
 }
 
 bool TextField::type(std::string_view typed, ActContext & /*context*/) {
+  edit();
   if (typed.empty() || typed.size() > limit_ - std::min(limit_, text_.size())) {
     return true;
   }
-  std::string next;
-  next.reserve(text_.size() + typed.size());
-  next += text_;
-  next += typed;
-  if (changed_) {
-    changed_(std::move(next));
-  }
+  std::string next{text_};
+  next.insert(caret_, typed);
+  change(std::move(next), caret_ + typed.size());
   return true;
 }
 
@@ -334,7 +396,9 @@ void TextField::paint(Painter &painter) const {
   const bool shown = std::fmod(painter.now, 2.0 * caretSeconds) < caretSeconds;
   if (focused && shown) {
     const float after =
-        text_.empty() ? 0.0f : painter.text.measure(lineShown_, painter.px(theme.type.body));
+        text_.empty() ? 0.0f
+                      : painter.text.measure(std::string_view{lineShown_}.substr(0, caretShown_),
+                                             painter.px(theme.type.body));
     const float caretX = x + after + painter.px(1.0f);
     painter.canvas.fillRect(Rect{caretX, lineY - line * 0.5f, painter.px(caretDp), line},
                             painter.fade(theme.colours.accent));
@@ -359,7 +423,7 @@ float Item::trailingWidth(LayoutContext &context, float width) {
     wanted = context.text.measure(value_, theme.px(theme.type.value));
   }
   if (opens_) {
-    wanted += theme.px(chevronDp * 2.0f + theme.spacing.gap * 2.0f);
+    wanted += chevronZone(theme);
   }
   return std::min(wanted, width * trailingShare);
 }
@@ -388,9 +452,8 @@ void Item::arrange(LayoutContext &context, const Rect &frame) {
   }
   titleShown_ = fitted(context.text, text_.title, room, theme.px(theme.type.body));
   subtitleShown_ = fitted(context.text, text_.subtitle, room, theme.px(theme.type.caption));
-  const float chevronRoom = opens_ ? theme.px(chevronDp * 2.0f + theme.spacing.gap * 2.0f) : 0.0f;
-  valueShown_ =
-      fitted(context.text, value_, std::max(0.0f, end - chevronRoom), theme.px(theme.type.value));
+  valueShown_ = fittedBeside(context.text, value_, end, opens_ ? chevronZone(theme) : 0.0f,
+                             theme.px(theme.type.value));
 }
 
 bool Item::focusable() const {
@@ -548,11 +611,11 @@ float Choice::trailingWidth(LayoutContext &context, float width) {
   for (const std::string &option : options_) {
     widest = std::max(widest, context.text.measure(option, theme.px(theme.type.value)));
   }
-  const float chevrons = theme.px(chevronDp * 2.0f + theme.spacing.gap * 2.0f) * 2.0f;
+  const float chevrons = chevronZone(theme) * 2.0f;
   const float end = std::min(widest + chevrons, width * trailingShare);
-  shown_ = chosen_ < options_.size()
-               ? fitted(context.text, options_[chosen_], end - chevrons, theme.px(theme.type.value))
-               : std::string{};
+  shown_ = chosen_ < options_.size() ? fittedBeside(context.text, options_[chosen_], end, chevrons,
+                                                    theme.px(theme.type.value))
+                                     : std::string{};
   return end;
 }
 
@@ -597,7 +660,7 @@ bool Choice::press(Point at, ActContext &context) {
   if (!focusable()) {
     return false;
   }
-  const float zone = context.theme().px(chevronDp * 2.0f + context.theme().spacing.gap * 2.0f);
+  const float zone = chevronZone(context.theme());
   if (at.x >= trailing().x && at.x < trailing().x + zone) {
     stepBy(-1, context);
   } else if (at.x >= trailing().right() - zone && at.x < trailing().right() + zone) {

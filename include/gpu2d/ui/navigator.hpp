@@ -1,8 +1,10 @@
 // navigator — the one stack of screens. Input, the pointer, drawing, prompts and typed text all go
 // to it and walk it from the top: only the top screen takes input; drawing starts at the highest
 // screen that covers the viewport and goes up. Back pops unless a widget or the screen takes it.
-// Typed text goes to the focused widget, then the screen; A on a text field asks the app's
-// on-screen keyboard, which types back through `text` and `act`.
+// An app's home is the root: the bottom screen, which nothing pops. Typed text goes to the
+// focused widget, then the screen; A on a text field asks the app's on-screen keyboard, which
+// types back through `text` and `act`. The app's chrome (a top bar, a docked keyboard) are
+// screens outside the stack that the pointer reaches first and the app draws where it likes.
 // Pushes and pops fade and slide on the toolkit's clock, which the app sets each frame; the
 // focus ring eases between widgets and scroll views ease the focus into view.
 #pragma once
@@ -21,6 +23,7 @@
 #include "gpu2d/ui/input.hpp"
 #include "gpu2d/ui/motion.hpp"
 #include "gpu2d/ui/screen.hpp"
+#include "gpu2d/ui/tab_dock.hpp"
 #include "gpu2d/ui/theme.hpp"
 #include "gpu2d/ui/typesetter.hpp"
 #include "gpu2d/ui/widget.hpp"
@@ -63,30 +66,47 @@ public:
     return now_;
   }
 
+  /// Puts `root` under every screen for good, in place of any root before it: `pop` and `clear`
+  /// leave it, and Back it does not take does nothing.
+  void setRoot(std::unique_ptr<Screen> root);
   void push(std::unique_ptr<Screen> screen);
-  /// Pops the top screen; it fades out.
+  /// Pops the top screen, unless it is the root; it fades out.
   void pop();
-  /// Puts `screen` in the top one's place.
+  /// Puts `screen` in the top one's place, or above the root.
   void replace(std::unique_ptr<Screen> screen);
-  /// Pops every screen.
+  /// Pops every screen above the root.
   void clear();
-  /// Closes `screen` and every screen above it; asked while input is handled, once it is done.
+  /// Closes `screen` and every screen above it, the root excepted; asked while input is handled,
+  /// once it is done.
   void closeFrom(const Screen &screen);
 
-  /// Whether any screen is open.
+  /// Whether a screen above the root is open.
   [[nodiscard]] bool active() const noexcept {
-    return !stack_.empty();
+    return stack_.size() > base();
   }
-  /// Whether anything is drawn, which includes screens fading out.
+  /// Whether the root is the top screen.
+  [[nodiscard]] bool atRoot() const noexcept {
+    return root_ && stack_.size() == 1;
+  }
+  /// Whether anything above the root is drawn, which includes screens fading out.
   [[nodiscard]] bool visible() const noexcept;
-  /// Whether a screen that is not an overlay is drawn, fading out included.
+  /// Whether a screen above the root that is not an overlay is drawn, fading out included.
   [[nodiscard]] bool pagesVisible() const noexcept;
   /// Whether something is still moving.
   [[nodiscard]] bool animating() const noexcept;
   [[nodiscard]] Screen *top() noexcept;
   [[nodiscard]] const Screen *top() const noexcept;
-  /// The open screens, bottom first.
+  /// The open screens, bottom first, the root among them.
   [[nodiscard]] std::vector<const Screen *> screens() const;
+
+  /// Adds `chrome`, a screen of the app's own outside the stack: laid out over the viewport after
+  /// the stack, drawn by `paintChrome` where the app draws it, and reached by the pointer before
+  /// the top screen wherever one of its widgets is (the last added first); what a press there
+  /// does to the stack happens at once. It takes no focus of the pad's and must outlive its use
+  /// here.
+  void addChrome(Screen &chrome);
+  /// Draws `chrome` as last laid out.
+  void paintChrome(Canvas &canvas, const Screen &chrome);
 
   /// Builds and lays out the screens drawn in `viewport`; overlays stand above the bottom
   /// `covered` pixels, which a docked keyboard takes.
@@ -105,6 +125,12 @@ public:
   bool text(std::string_view typed);
   /// Whether the top screen's focused widget takes typed text, as last laid out.
   [[nodiscard]] bool typing() const;
+  /// Whether that widget is being edited: typed into, or opened with A, since it took the focus.
+  [[nodiscard]] bool editing() const;
+  /// Starts editing the top screen's focused text field with its caret at the end, as A on it
+  /// does without asking for the keyboard; `false` stops. Asked while input is
+  /// handled or before the top screen is laid out, it waits until it is.
+  void edit(bool on);
   /// The top screen's prompts: the focused widget's, then the screen's.
   [[nodiscard]] std::vector<Hint> hints();
 
@@ -123,6 +149,10 @@ private:
     Rect area;
     Tween presence;
     bool leaving{false};
+  };
+  struct Chrome {
+    Screen *screen{};
+    std::unique_ptr<Widget> root;
   };
   class Context;
   /// A change to the stack asked for while input was being handled, applied after it.
@@ -147,8 +177,20 @@ private:
   void reveal(Entry &entry);
   /// Applies what the handled input asked for.
   void settle(Context &context);
+  /// Starts or stops editing `entry`'s focused text field.
+  void applyEdit(Entry &entry, bool on);
   /// Moves the screens that asked to close to the leaving ones.
   void dropClosing();
+  /// How many screens at the bottom nothing pops: 1 with a root.
+  [[nodiscard]] std::size_t base() const noexcept {
+    return root_ ? 1 : 0;
+  }
+  /// The dock LB and RB step on `entry`: its own, else one in the chrome.
+  [[nodiscard]] TabDock *dockFor(Entry &entry);
+  /// The pointer on the chrome; true when a chrome widget took it.
+  bool pointChrome(const PointerEvent &event);
+  /// The pointer moved to `at` on `entry`: hovers and focuses what it is on.
+  bool moveOn(Entry &entry, Point at);
   void play(const std::function<void()> &sound) const;
   void paintEntry(Canvas &canvas, const Entry &entry, bool top);
   /// The lowest screen drawn: the top one, or below it while it is an overlay or still moving.
@@ -170,6 +212,9 @@ private:
   Rect viewport_;
   float covered_{};
   std::vector<Entry> stack_;
+  /// Whether `stack_`'s first screen is the root.
+  bool root_{false};
+  std::vector<Chrome> chrome_;
   /// Popped screens fading out, drawn over the stack.
   std::vector<Entry> leaving_;
   /// How deep input handling is; stack changes wait until it is back to 0.
@@ -177,6 +222,8 @@ private:
   std::vector<Deferred> deferred_;
   /// A focus asked for while input was handled.
   std::optional<std::string> focusLater_;
+  /// An edit started or stopped while input was handled or before the top screen was laid out.
+  std::optional<bool> editLater_;
 };
 
 } // namespace gpu2d::ui
