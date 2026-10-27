@@ -1,14 +1,17 @@
 // Each standard widget's one behaviour, pressed through the navigator as an app would press it.
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../check.hpp"
 #include "fakes.hpp"
 #include "gpu2d/ui/layout.hpp"
 #include "gpu2d/ui/screen.hpp"
+#include "gpu2d/ui/text_fit.hpp"
 #include "gpu2d/ui/widgets.hpp"
 
 namespace {
@@ -426,6 +429,142 @@ void textFieldsTakeTypedText() {
          "nothing takes text off a field");
 }
 
+void caretMovesWhileEditing() {
+  test::Rig rig;
+  rig.navigator.setKeyboard([] {
+  });
+  auto opened = std::make_unique<Form>();
+  rig.navigator.push(std::move(opened));
+  rig.navigator.edit(true);
+  rig.frame();
+  expect(rig.navigator.editing(), "an edit asked before the screen is laid out waits for it");
+  rig.navigator.pop();
+  rig.frame(1.0);
+  auto owned = std::make_unique<Form>();
+  Form *form = owned.get();
+  rig.navigator.push(std::move(owned));
+  rig.frame();
+  expect(!rig.navigator.act(Action::Left) && !rig.navigator.editing() &&
+             rig.navigator.focused() == "name",
+         "Left on a field not being edited is a focus move");
+  rig.navigator.text("Ad\xC3\xA9");
+  expect(rig.navigator.editing(), "typing starts editing");
+  rig.navigator.act(Action::Left);
+  rig.navigator.act(Action::Left);
+  rig.navigator.text("x");
+  expect(form->name == "Axd\xC3\xA9",
+         "Left steps over a whole character; text goes in at the caret");
+  rig.navigator.act(Action::Right);
+  rig.navigator.act(Action::Right);
+  expect(rig.navigator.act(Action::Right) && rig.navigator.focused() == "name",
+         "Right at the end stays in the field");
+  rig.navigator.act(Action::Erase);
+  expect(form->name == "Axd", "Erase at the end takes the last character, all its bytes");
+  rig.navigator.act(Action::Left);
+  rig.navigator.act(Action::Erase);
+  expect(form->name == "Ad", "Erase takes the character before the caret");
+  rig.navigator.text("a");
+  expect(form->name == "Aad", "and the caret stays where Erase left it");
+  rig.navigator.act(Action::Left);
+  rig.navigator.act(Action::Left);
+  expect(rig.navigator.act(Action::Left) && rig.navigator.focused() == "name",
+         "Left at the start stays in the field");
+  rig.navigator.text("_");
+  expect(form->name == "_Aad", "typing at the start");
+
+  rig.navigator.act(Action::Down);
+  expect(rig.navigator.focused() == "password" && !rig.navigator.editing(),
+         "Down leaves the field and its editing");
+  rig.navigator.act(Action::Up);
+  expect(rig.navigator.focused() == "name" && !rig.navigator.editing(),
+         "coming back is not editing");
+  rig.navigator.text("!");
+  expect(form->name == "_Aad!", "typing again starts at the end");
+
+  rig.navigator.edit(true);
+  rig.navigator.act(Action::Left);
+  rig.navigator.edit(false);
+  rig.navigator.text("?");
+  expect(form->name == "_Aad!?", "the app starts and stops editing; a new edit starts at the end");
+  rig.navigator.act(Action::Accept);
+  rig.navigator.act(Action::Left);
+  rig.navigator.act(Action::Submit);
+  expect(!rig.navigator.editing() && form->submitted == 1, "Submit stops editing");
+}
+
+void fittedAroundKeepsAPlaceInView() {
+  // The fake face is half the size a byte wide; at size 2 a byte is a pixel and "…" three.
+  test::FakeText text;
+  const std::string line = "abcdefghij";
+  const ui::FittedAt whole = ui::fittedAround(text, line, 4, 10.0f, 2.0f);
+  expect(whole.text == line && whole.at == 4, "a line that fits shows whole");
+  const ui::FittedAt end = ui::fittedAround(text, line, 8, 7.0f, 2.0f);
+  expect(end.text == "\xE2\x80\xA6"
+                     "ghij" &&
+             end.at == 5,
+         "a place near the end shows the end");
+  const ui::FittedAt start = ui::fittedAround(text, line, 2, 7.0f, 2.0f);
+  expect(start.text == "abcd\xE2\x80\xA6" && start.at == 2,
+         "a place near the start shows the start");
+  const ui::FittedAt middle = ui::fittedAround(text, line, 5, 7.0f, 2.0f);
+  expect(middle.text == "\xE2\x80\xA6"
+                        "e"
+                        "\xE2\x80\xA6" &&
+             middle.at == 4,
+         "a place in the middle shows what ends at it between ellipses");
+  expect(ui::nextCharacter("a\xC3\xA9"
+                           "b",
+                           1) == 3 &&
+             ui::nextCharacter("ab", 2) == 2,
+         "the next character steps over its bytes and stops at the end");
+}
+
+/// A face where one word is a width that float rounding loses when a chevron is added and taken
+/// away, noting each cut it is asked to measure.
+class RoundingText final : public ui::Typesetter {
+public:
+  [[nodiscard]] float measure(std::string_view text, float size) override {
+    if (text.find("\xE2\x80\xA6") != std::string_view::npos) {
+      ++cuts;
+    }
+    return text == word ? width : fake.measure(text, size);
+  }
+  [[nodiscard]] float lineHeight(float size) override {
+    return fake.lineHeight(size);
+  }
+  void draw(Canvas & /*canvas*/, std::string_view /*text*/, Point /*topLeft*/, float /*size*/,
+            Colour /*colour*/) override {
+  }
+
+  std::string word{"1 game from Epic"};
+  float width{std::nextafter(110.0f, 200.0f)};
+  int cuts{0};
+  test::FakeText fake;
+};
+
+void valueThatSetsTheEndShowsWhole() {
+  const ui::Theme theme;
+  RoundingText text;
+  ui::ViewState state;
+  ui::LayoutContext context{theme, text, state};
+  const float zone = theme.px(12.0f + theme.spacing.gap * 2.0f);
+  expect((text.width + zone) - zone < text.width &&
+             (text.width + 2.0f * zone) - 2.0f * zone < text.width,
+         "the width loses a bit through the chevrons' sum");
+  ui::Item item{"runner", ui::Item::Text{"GE-Proton 11-11", ""}};
+  item.value(text.word).onPress(
+      [] {
+      },
+      "Open", true);
+  item.arrange(context, Rect{0.0f, 0.0f, 900.0f, 60.0f});
+  expect(text.cuts == 0, "a value beside a chevron is not cut when the end was sized to it");
+  ui::Choice choice{"runner", ui::Item::Text{"Runner", ""}, std::vector<std::string>{text.word}, 0,
+                    [](std::size_t /*index*/) {
+                    }};
+  choice.arrange(context, Rect{0.0f, 0.0f, 900.0f, 60.0f});
+  expect(text.cuts == 0, "nor is the widest choice between its chevrons");
+}
+
 void toastComesAndGoes() {
   ui::Toast toast;
   toast.show("Saved", false, 10.0, 3.0);
@@ -447,6 +586,9 @@ int main() {
   wideTabStripScrolls();
   cardButtonsChooseInAGrid();
   textFieldsTakeTypedText();
+  caretMovesWhileEditing();
+  fittedAroundKeepsAPlaceInView();
+  valueThatSetsTheEndShowsWhole();
   toastComesAndGoes();
   std::printf("ui widgets: all checks passed\n");
   return 0;

@@ -1,10 +1,12 @@
 #include "gpu2d/ui/navigator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <utility>
 
 #include "gpu2d/ui/focus.hpp"
 #include "gpu2d/ui/layout.hpp"
+#include "gpu2d/ui/tab_dock.hpp"
 #include "gpu2d/ui/widgets.hpp"
 
 namespace gpu2d::ui {
@@ -142,6 +144,18 @@ Tabs *findTabs(Widget &widget) {
   return nullptr;
 }
 
+TabDock *findDock(Widget &widget) {
+  if (auto *dock = dynamic_cast<TabDock *>(&widget)) {
+    return dock;
+  }
+  for (const std::unique_ptr<Widget> &child : widget.children()) {
+    if (TabDock *found = findDock(*child)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
 void findBars(Widget &widget, std::vector<HintBar *> &bars) {
   if (auto *bar = dynamic_cast<HintBar *>(&widget)) {
     bars.push_back(bar);
@@ -206,6 +220,21 @@ private:
   Screen &screen_;
 };
 
+void Navigator::setRoot(std::unique_ptr<Screen> root) {
+  Entry entry;
+  entry.screen = std::move(root);
+  entry.presence.snap(1.0f);
+  if (root_) {
+    stack_.front() = std::move(entry);
+  } else {
+    stack_.insert(stack_.begin(), std::move(entry));
+    root_ = true;
+  }
+  if (viewport_.width > 0.0f) {
+    build(stack_.front());
+  }
+}
+
 void Navigator::push(std::unique_ptr<Screen> screen) {
   if (busy_ > 0) {
     deferred_.push_back(Deferred{Deferred::Kind::Push, std::move(screen)});
@@ -227,7 +256,7 @@ void Navigator::pop() {
     deferred_.push_back(Deferred{Deferred::Kind::Pop, nullptr});
     return;
   }
-  if (stack_.empty()) {
+  if (stack_.size() <= base()) {
     return;
   }
   Entry entry = std::move(stack_.back());
@@ -251,7 +280,7 @@ void Navigator::clear() {
     deferred_.push_back(Deferred{Deferred::Kind::Clear, nullptr});
     return;
   }
-  while (!stack_.empty()) {
+  while (stack_.size() > base()) {
     pop();
   }
 }
@@ -269,7 +298,7 @@ void Navigator::closeFrom(const Screen &screen) {
 }
 
 void Navigator::dropClosing() {
-  for (std::size_t i = stack_.size(); i-- > 0;) {
+  for (std::size_t i = stack_.size(); i-- > base();) {
     if (stack_[i].screen->closing()) {
       Entry entry = std::move(stack_[i]);
       stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(i));
@@ -281,14 +310,15 @@ void Navigator::dropClosing() {
 }
 
 bool Navigator::visible() const noexcept {
-  return !stack_.empty() || !leaving_.empty();
+  return stack_.size() > base() || !leaving_.empty();
 }
 
 bool Navigator::pagesVisible() const noexcept {
   const auto page = [](const Entry &entry) {
     return !entry.screen->overlay();
   };
-  return std::ranges::any_of(stack_, page) || std::ranges::any_of(leaving_, page);
+  const auto above = stack_.begin() + static_cast<std::ptrdiff_t>(std::min(base(), stack_.size()));
+  return std::any_of(above, stack_.end(), page) || std::ranges::any_of(leaving_, page);
 }
 
 bool Navigator::animating() const noexcept {
@@ -316,6 +346,22 @@ std::vector<const Screen *> Navigator::screens() const {
     out.push_back(entry.screen.get());
   }
   return out;
+}
+
+void Navigator::addChrome(Screen &chrome) {
+  chrome_.push_back(Chrome{&chrome, nullptr});
+}
+
+void Navigator::paintChrome(Canvas &canvas, const Screen &chrome) {
+  for (const Chrome &entry : chrome_) {
+    if (entry.screen != &chrome || entry.root == nullptr) {
+      continue;
+    }
+    const ViewState &view = chrome.view();
+    Painter painter{canvas,       theme_, text_, prompts_, view.focused,
+                    view.hovered, now_,   1.0f,  viewport_};
+    entry.root->paint(painter);
+  }
 }
 
 void Navigator::build(Entry &entry) {
@@ -354,6 +400,13 @@ void Navigator::build(Entry &entry) {
     }
   } else if (items.empty()) {
     view.focused.clear();
+  }
+  if (view.editing != view.focused) {
+    view.editing.clear();
+  }
+  if (editLater_ && !stack_.empty() && &entry == &stack_.back()) {
+    applyEdit(entry, *editLater_);
+    editLater_.reset();
   }
   if (Widget *focused = findIn(*entry.root, view.focused)) {
     view.focusFrame = focused->frame();
@@ -428,6 +481,11 @@ void Navigator::layout(const Rect &viewport, float covered) {
   for (Entry &entry : leaving_) {
     build(entry);
   }
+  for (Chrome &chrome : chrome_) {
+    LayoutContext context{theme_, text_, chrome.screen->view(), now_};
+    chrome.root = chrome.screen->build(theme_);
+    chrome.root->arrange(context, chrome.screen->area(viewport_, theme_));
+  }
   if (stack_.empty()) {
     return;
   }
@@ -442,9 +500,10 @@ void Navigator::layout(const Rect &viewport, float covered) {
 void Navigator::paintEntry(Canvas &canvas, const Entry &entry, bool top) {
   const float presence = std::clamp(entry.presence.value(now_), 0.0f, 1.0f);
   const bool overlay = entry.screen->overlay();
-  Painter painter{
-      canvas,   theme_, text_, prompts_, entry.screen->view().focused, now_, easeOut(presence),
-      viewport_};
+  const ViewState &state = entry.screen->view();
+  Painter painter{canvas,        theme_,        text_, prompts_,
+                  state.focused, state.hovered, now_,  easeOut(presence),
+                  viewport_};
   if (overlay) {
     entry.screen->paintBackdrop(painter, viewport_);
   }
@@ -456,7 +515,8 @@ void Navigator::paintEntry(Canvas &canvas, const Entry &entry, bool top) {
   entry.root->paint(painter);
   const ViewState &view = entry.screen->view();
   if (top && !entry.leaving) {
-    if (const Widget *focused = findIn(*entry.root, view.focused)) {
+    if (const Widget *focused = findIn(*entry.root, view.focused);
+        focused != nullptr && !focused->drawsFocus()) {
       const float gap = theme_.px(theme_.shape.focusGap);
       const float width = theme_.px(theme_.shape.focusRing);
       const Rect ring = view.ring.value();
@@ -732,7 +792,13 @@ bool Navigator::act(Action action) {
       break;
     case Action::PreviousTab:
     case Action::NextTab:
-      if (Tabs *tabs = findTabs(*entry->root)) {
+      // A dock's tabs are chosen by the app's hook, which sounds them.
+      if (TabDock *dock = findTabs(*entry->root) == nullptr ? dockFor(*entry) : nullptr) {
+        ++busy_;
+        dock->step(action == Action::NextTab ? 1 : -1);
+        --busy_;
+        handled = true;
+      } else if (Tabs *tabs = findTabs(*entry->root)) {
         const bool onTab = focused != nullptr && focused->id().starts_with(tabs->id() + "/");
         if (const std::optional<std::string> chosen =
                 tabs->step(action == Action::NextTab ? 1 : -1)) {
@@ -749,7 +815,8 @@ bool Navigator::act(Action action) {
       ++busy_;
       const Screen::BackReply reply = screen.back(context);
       --busy_;
-      if (reply == Screen::BackReply::Pop) {
+      // The root stays whatever its screen answers.
+      if (reply == Screen::BackReply::Pop && !(root_ && entry == &stack_.front())) {
         screen.close();
         play(sounds_.back);
       }
@@ -764,22 +831,97 @@ bool Navigator::act(Action action) {
   return handled;
 }
 
+TabDock *Navigator::dockFor(Entry &entry) {
+  if (TabDock *dock = findDock(*entry.root)) {
+    return dock;
+  }
+  for (Chrome &chrome : chrome_) {
+    if (chrome.root == nullptr) {
+      continue;
+    }
+    if (TabDock *dock = findDock(*chrome.root)) {
+      return dock;
+    }
+  }
+  return nullptr;
+}
+
+bool Navigator::pointChrome(const PointerEvent &event) {
+  for (auto chrome = chrome_.rbegin(); chrome != chrome_.rend(); ++chrome) {
+    if (chrome->root == nullptr) {
+      continue;
+    }
+    Widget *hit = hitTest(*chrome->root, event.at);
+    if (hit == nullptr) {
+      continue;
+    }
+    ViewState &view = chrome->screen->view();
+    Context context{*this, *chrome->screen};
+    // The chrome is no screen of the stack, so what its widgets do to the stack happens at once.
+    switch (event.kind) {
+    case PointerKind::Move:
+      view.hovered = hit->id();
+      hit->hover(event.at, context);
+      break;
+    case PointerKind::Press:
+      hit->press(event.at, context);
+      break;
+    case PointerKind::Context:
+      hit->context(event.at, context);
+      break;
+    default:
+      break;
+    }
+    settle(context);
+    return true;
+  }
+  return false;
+}
+
+bool Navigator::moveOn(Entry &entry, Point at) {
+  Widget *hit = hitTest(*entry.root, at);
+  entry.screen->view().hovered = hit != nullptr ? hit->id() : std::string{};
+  if (hit == nullptr) {
+    return false;
+  }
+  if (hit->focusable()) {
+    focusOn(entry, hit->id(), true);
+    hit = hitTest(*fresh()->root, at);
+    if (hit == nullptr) {
+      return true;
+    }
+  }
+  Context context{*this, *stack_.back().screen};
+  ++busy_;
+  hit->hover(at, context);
+  --busy_;
+  settle(context);
+  return true;
+}
+
 bool Navigator::pointer(const PointerEvent &event) {
+  const bool overChrome =
+      event.kind != PointerKind::Leave && event.kind != PointerKind::Wheel && pointChrome(event);
+  if (event.kind == PointerKind::Move || event.kind == PointerKind::Leave || overChrome) {
+    for (Chrome &chrome : chrome_) {
+      if (!overChrome || chrome.root == nullptr || hitTest(*chrome.root, event.at) == nullptr) {
+        chrome.screen->view().hovered.clear();
+      }
+    }
+  }
   Entry *entry = fresh();
   if (entry == nullptr) {
-    return false;
+    return overChrome;
+  }
+  if (overChrome || event.kind == PointerKind::Leave) {
+    entry->screen->view().hovered.clear();
+    return overChrome;
   }
   Screen &screen = *entry->screen;
   ViewState &view = screen.view();
   switch (event.kind) {
-  case PointerKind::Move: {
-    Widget *hit = hitTest(*entry->root, event.at);
-    if (hit == nullptr || !hit->focusable()) {
-      return hit != nullptr;
-    }
-    focusOn(*entry, hit->id(), true);
-    return true;
-  }
+  case PointerKind::Move:
+    return moveOn(*entry, event.at);
   case PointerKind::Press: {
     Widget *hit = hitTest(*entry->root, event.at);
     if (hit == nullptr) {
@@ -809,17 +951,42 @@ bool Navigator::pointer(const PointerEvent &event) {
     settle(context);
     return true;
   }
+  case PointerKind::Context: {
+    moveOn(*entry, event.at);
+    entry = fresh();
+    Widget *hit = hitTest(*entry->root, event.at);
+    bool handled = false;
+    if (hit != nullptr) {
+      Context context{*this, *entry->screen};
+      ++busy_;
+      handled = hit->context(event.at, context);
+      --busy_;
+      settle(context);
+    }
+    // Else it is the second action of what is focused now.
+    return handled || act(Action::Secondary);
+  }
   case PointerKind::Wheel: {
-    ScrollView *scroll = scrollAt(*entry->root, event.at, view);
-    if (scroll == nullptr) {
+    if (ScrollView *scroll = scrollAt(*entry->root, event.at, view)) {
+      ViewState::Scroll &state = view.scroll(scroll->id());
+      const float step = theme_.px(theme_.spacing.rowHeight) * wheelRows;
+      state.offset.aim(std::clamp(state.offset.target() - event.wheel * step, 0.0f, state.limit));
+      view.focusFromPointer = true;
+      return true;
+    }
+    Widget *focused = findIn(*entry->root, view.focused);
+    if (focused == nullptr) {
       return false;
     }
-    ViewState::Scroll &state = view.scroll(scroll->id());
-    const float step = theme_.px(theme_.spacing.rowHeight) * wheelRows;
-    state.offset.aim(std::clamp(state.offset.target() - event.wheel * step, 0.0f, state.limit));
-    view.focusFromPointer = true;
-    return true;
+    Context context{*this, screen};
+    ++busy_;
+    const bool handled = focused->wheel(event.wheel, context);
+    --busy_;
+    settle(context);
+    return handled;
   }
+  case PointerKind::Leave:
+    break;
   }
   return false;
 }
@@ -847,6 +1014,35 @@ bool Navigator::typing() const {
   const Entry &entry = stack_.back();
   const Widget *focused = findIn(*entry.root, entry.screen->view().focused);
   return focused != nullptr && focused->takesText();
+}
+
+bool Navigator::editing() const {
+  if (!typing()) {
+    return false;
+  }
+  const ViewState &view = stack_.back().screen->view();
+  return view.editing == view.focused;
+}
+
+void Navigator::edit(bool on) {
+  if (busy_ > 0 || stack_.empty() || !stack_.back().root) {
+    editLater_ = on;
+    return;
+  }
+  applyEdit(stack_.back(), on);
+}
+
+void Navigator::applyEdit(Entry &entry, bool on) {
+  ViewState &view = entry.screen->view();
+  if (!on) {
+    view.editing.clear();
+    return;
+  }
+  const Widget *focused = findIn(*entry.root, view.focused);
+  if (focused != nullptr && focused->takesText() && view.editing != view.focused) {
+    view.editing = view.focused;
+    view.caret = SIZE_MAX;
+  }
 }
 
 std::vector<Hint> Navigator::hints() {

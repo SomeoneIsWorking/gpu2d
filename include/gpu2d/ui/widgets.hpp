@@ -91,8 +91,11 @@ private:
 };
 
 /// A labelled line of text being typed: what is typed, or a placeholder while it is empty, with a
-/// caret at its end while focused; a masked field shows a dot per character. It edits the app's
-/// text through `changed`, so it holds a copy only while built; a masked copy is wiped.
+/// caret while focused; a masked field shows a dot per character. A, typed text or Erase start
+/// editing it with the caret at the end; while edited, Left and Right move the caret a character,
+/// typing and Erase act at it, and Submit or the focus leaving stop it. The caret lives in the
+/// screen's `ViewState`. It edits the app's text through `changed`, so it holds a copy only while
+/// built; a masked copy is wiped.
 class TextField : public Widget {
 public:
   TextField(std::string id, std::string label, std::string text,
@@ -152,6 +155,10 @@ public:
 private:
   /// The line as drawn: the text, or a dot per character when masked.
   [[nodiscard]] std::string drawn() const;
+  /// Starts editing with the caret at the end, unless it is being edited.
+  void edit();
+  /// Puts the caret at byte `at` and the field's text to `next`.
+  void change(std::string next, std::size_t at);
 
   std::string label_;
   std::string text_;
@@ -163,6 +170,12 @@ private:
   std::string verb_;
   std::string labelShown_;
   std::string lineShown_;
+  /// The screen's state as last laid out, which holds the caret.
+  ViewState *state_{nullptr};
+  bool editing_{false};
+  /// The caret as a byte offset into the text, and into `lineShown_`.
+  std::size_t caret_{};
+  std::size_t caretShown_{};
 };
 
 /// A row: title, an optional subtitle, and what stands at its end. A plain item shows a value and,

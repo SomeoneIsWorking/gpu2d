@@ -83,6 +83,8 @@ add_library(gpu2d_ui STATIC
   src/ui/widget.cpp
   src/ui/layout.cpp
   src/ui/widgets.cpp
+  src/ui/cell_grid.cpp
+  src/ui/tab_dock.cpp
   src/ui/screen.cpp
   src/ui/navigator.cpp
 )
@@ -122,7 +124,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       COMMAND gpu2d_text_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/fonts/CalSans-Regular.ttf")
 
     # The toolkit through its public headers with a fake face: no GPU.
-    foreach(name layout navigator widgets)
+    foreach(name layout navigator widgets cell_grid tab_dock)
       add_executable(gpu2d_ui_${name}_test tests/ui/${name}_test.cpp)
       target_link_libraries(gpu2d_ui_${name}_test PRIVATE gpu2d::ui)
       target_compile_options(gpu2d_ui_${name}_test PRIVATE -Wall -Wextra -Wpedantic)

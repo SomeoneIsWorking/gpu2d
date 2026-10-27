@@ -4,6 +4,7 @@
 // child a group last focused) lives in the screen's `ViewState`, keyed by widget id.
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <optional>
@@ -65,10 +66,16 @@ public:
   Rect focusFrame;
   /// Whether the pointer moved the focus last, which scrolls nothing into view.
   bool focusFromPointer{false};
+  /// The id of the widget the pointer rests on; empty for none.
+  std::string hovered;
   /// Per focus group, the id of the child it last focused.
   std::map<std::string, std::string, std::less<>> remembered;
   /// The focus ring as drawn.
   RectFollow ring;
+  /// The id of the text field being typed in, which holds the focus; empty for none.
+  std::string editing;
+  /// That field's caret, a byte offset clamped to its text when laid out.
+  std::size_t caret{};
 
 private:
   std::map<std::string, Scroll, std::less<>> scrolls_;
@@ -117,6 +124,8 @@ struct Painter {
   Prompts &prompts;
   /// The focused widget's id on the screen being painted; empty when it has none.
   std::string_view focused;
+  /// The id of the widget the pointer rests on; empty when none.
+  std::string_view hovered;
   double now{};
   /// The screen's opacity as it comes and goes.
   float alpha{1.0f};
@@ -227,6 +236,22 @@ public:
   }
   /// Called when a focus or a pointer lands on it from elsewhere.
   virtual void focused(ActContext & /*context*/) {
+  }
+  /// The pointer moved to `at`, inside its frame, after it took any focus.
+  virtual void hover(Point /*at*/, ActContext & /*context*/) {
+  }
+  /// Wheel notches while focused with no scroll view under the pointer; true when taken.
+  virtual bool wheel(float /*notches*/, ActContext & /*context*/) {
+    return false;
+  }
+  /// A secondary press at `at`, inside its frame, after it took the focus; false leaves it to the
+  /// focused widget's and the screen's second action.
+  virtual bool context(Point /*at*/, ActContext & /*context*/) {
+    return false;
+  }
+  /// Whether it draws its own focus, so the navigator's ring stays off it.
+  [[nodiscard]] virtual bool drawsFocus() const {
+    return false;
   }
 
   /// Draws it, then its children.

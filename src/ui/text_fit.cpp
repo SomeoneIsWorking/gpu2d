@@ -1,5 +1,8 @@
 #include "gpu2d/ui/text_fit.hpp"
 
+#include <algorithm>
+#include <utility>
+
 namespace gpu2d::ui {
 namespace {
 
@@ -81,6 +84,39 @@ std::string fittedEnd(Typesetter &typesetter, std::string_view text, float room,
     }
   }
   return std::string{ellipsis} + std::string{text.substr(cuts.empty() ? text.size() : cuts[low])};
+}
+
+std::size_t nextCharacter(std::string_view text, std::size_t at) noexcept {
+  if (at >= text.size()) {
+    return text.size();
+  }
+  ++at;
+  while (at < text.size() && continuation(text[at])) {
+    ++at;
+  }
+  return at;
+}
+
+FittedAt fittedAround(Typesetter &typesetter, std::string_view text, std::size_t at, float room,
+                      float size) {
+  at = characterStart(text, at);
+  if (typesetter.measure(text, size) <= room) {
+    return FittedAt{std::string{text}, at};
+  }
+  std::string tail = fittedEnd(typesetter, text, room, size);
+  const std::size_t tailFrom = text.size() - (tail.size() - ellipsis.size());
+  if (at >= tailFrom) {
+    return FittedAt{std::move(tail), ellipsis.size() + at - tailFrom};
+  }
+  std::string head = fitted(typesetter, text, room, size);
+  if (at <= head.size() - ellipsis.size()) {
+    return FittedAt{std::move(head), at};
+  }
+  const float mark = typesetter.measure(ellipsis, size);
+  std::string middle = fittedEnd(typesetter, text.substr(0, at), std::max(0.0f, room - mark), size);
+  const std::size_t shownAt = middle.size();
+  middle += ellipsis;
+  return FittedAt{std::move(middle), shownAt};
 }
 
 std::vector<std::string> wrapped(Typesetter &typesetter, std::string_view text, float room,

@@ -401,6 +401,110 @@ void ringFollowsTheFocus() {
   expect(!rig.navigator.animating(), "and arrives");
 }
 
+/// A screen of one pressable label-sized button standing at `frame`, counting presses and hovers.
+class Strip final : public ui::Screen {
+public:
+  explicit Strip(Rect frame) : Screen{"strip", "Strip"}, frame_{frame} {
+  }
+
+  class Hit final : public ui::Widget {
+  public:
+    Hit(Strip &owner, Rect place) : Widget{"strip/hit"}, owner_{owner}, place_{place} {
+    }
+    [[nodiscard]] bool pressable() const override {
+      return true;
+    }
+    bool press(Point /*at*/, ui::ActContext & /*context*/) override {
+      ++owner_.presses;
+      return true;
+    }
+    void hover(Point /*at*/, ui::ActContext & /*context*/) override {
+      ++owner_.hovers;
+    }
+    void arrange(ui::LayoutContext & /*context*/, const Rect & /*frame*/) override {
+      frame_ = place_;
+    }
+
+  private:
+    Strip &owner_;
+    Rect place_;
+  };
+
+  [[nodiscard]] std::unique_ptr<ui::Widget> build(const ui::Theme & /*theme*/) override {
+    auto root = std::make_unique<ui::Stack>();
+    root->add(std::make_unique<Hit>(*this, frame_));
+    return root;
+  }
+
+  int presses{0};
+  int hovers{0};
+
+private:
+  Rect frame_;
+};
+
+void theRootStaysUnderEveryScreen() {
+  test::Rig rig;
+  auto owned = std::make_unique<Pages>();
+  Pages &home = *owned;
+  rig.navigator.setRoot(std::move(owned));
+  rig.frame();
+  expect(rig.navigator.atRoot() && !rig.navigator.active() && !rig.navigator.visible(),
+         "the root alone is not a screen open above it");
+  rig.navigator.act(Action::Back);
+  rig.frame(1.0);
+  expect(rig.navigator.atRoot() && rig.backs == 0, "Back on the root pops nothing");
+  rig.navigator.push(std::make_unique<Pages>());
+  rig.frame();
+  expect(rig.navigator.active() && !rig.navigator.atRoot() && rig.navigator.pagesVisible(),
+         "a page over it is open");
+  rig.navigator.clear();
+  rig.frame(1.0);
+  expect(rig.navigator.atRoot() && !rig.navigator.visible(), "clear leaves the root");
+  rig.navigator.pop();
+  rig.frame(1.0);
+  expect(rig.navigator.atRoot() && rig.navigator.top() == &home, "and so does pop");
+  rig.navigator.focus("row0");
+  rig.navigator.act(Action::Accept);
+  expect(home.pressed == std::vector<std::string>{"row0"},
+         "the root takes input while it is on top");
+  rig.navigator.closeFrom(home);
+  rig.frame(1.0);
+  expect(rig.navigator.top() == &home, "closing from the root keeps it");
+}
+
+void chromeTakesThePointerFirst() {
+  test::Rig rig;
+  rig.navigator.push(std::make_unique<Pages>());
+  Strip bar{Rect{0.0f, 0.0f, 1280.0f, 40.0f}};
+  rig.navigator.addChrome(bar);
+  rig.frame();
+  const std::string focused = rig.navigator.focused();
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Move, Point{100.0f, 20.0f}, 0.0f});
+  expect(bar.hovers == 1 && bar.view().hovered == "strip/hit",
+         "the pointer on a chrome widget hovers it");
+  expect(rig.navigator.focused() == focused, "and leaves the screen's focus where it was");
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press, Point{100.0f, 20.0f}, 0.0f});
+  expect(bar.presses == 1, "a press on it presses it");
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Move, Point{100.0f, 400.0f}, 0.0f});
+  expect(bar.view().hovered.empty(), "the pointer moving off it lets it go");
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Move, Point{100.0f, 20.0f}, 0.0f});
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Leave, Point{}, 0.0f});
+  expect(bar.view().hovered.empty() && rig.navigator.top()->view().hovered.empty(),
+         "the pointer leaving lets everything go");
+}
+
+void contextAndWheelReachTheFocusedWidget() {
+  test::Rig rig;
+  auto owned = std::make_unique<Pages>();
+  rig.navigator.push(std::move(owned));
+  rig.frame();
+  const Rect row = rig.navigator.find("row2")->frame();
+  const Point middle{row.x + row.width * 0.5f, row.y + row.height * 0.5f};
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Context, middle, 0.0f});
+  expect(rig.navigator.focused() == "row2" && rig.navigator.top()->view().hovered == "row2",
+         "a secondary press focuses and hovers what it is on");
+}
 } // namespace
 
 int main() {
@@ -419,6 +523,9 @@ int main() {
   anOverlayNamesItsPromptsOnTheBarBelow();
   overlaysStandAboveACoveredStrip();
   focusAskedWhileHandlingInputWaits();
+  theRootStaysUnderEveryScreen();
+  chromeTakesThePointerFirst();
+  contextAndWheelReachTheFocusedWidget();
   std::printf("ui navigator: all checks passed\n");
   return 0;
 }

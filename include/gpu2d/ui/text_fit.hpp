@@ -14,6 +14,22 @@ namespace gpu2d::ui {
 /// The largest character boundary of UTF-8 `text` at or before byte `at`.
 [[nodiscard]] std::size_t characterStart(std::string_view text, std::size_t at) noexcept;
 
+/// The character boundary of UTF-8 `text` after the character at byte `at`; the end at the end.
+[[nodiscard]] std::size_t nextCharacter(std::string_view text, std::size_t at) noexcept;
+
+/// A line fitted to a width with a position in it kept in view.
+struct FittedAt {
+  std::string text;
+  /// The kept position, as a byte offset into `text`.
+  std::size_t at{};
+};
+
+/// `text` when it fits `room` pixels at `size`, else cut with "…" so byte `at` (a character
+/// boundary) shows: its end when `at` is in it, else its start, else the stretch ending at `at`
+/// between two ellipses.
+[[nodiscard]] FittedAt fittedAround(Typesetter &typesetter, std::string_view text, std::size_t at,
+                                    float room, float size);
+
 /// `text` when it fits `room` pixels at `size`, else the longest start of it that fits with "…"
 /// after it.
 [[nodiscard]] std::string fitted(Typesetter &typesetter, std::string_view text, float room,
