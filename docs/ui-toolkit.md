@@ -14,7 +14,7 @@ glyphs (`Prompts`), the sounds and the input, and builds its screens from its ow
 | Motion | `motion.hpp` | One clock (seconds the app sets per frame); `Tween` for screen fades and slides, `Follow`/`RectFollow` for scrolling and the focus ring |
 | Widget tree | `widget.hpp` | `Widget` (stable id, measure, arrange, frame, paint, act, press, hints), `ViewState` (what outlives a rebuild), `ActContext`, `Painter` |
 | Layout | `layout.hpp` | `Column`, `Row`, `Stack`, `Grid`, `Card`, `Backdrop`, `Centre`, `Spacer`, `ScrollView`; padding and spacing in dp |
-| Widgets | `widgets.hpp` | `Label`, `SectionHeading`, `Button`, `Item` (title, subtitle, value), `Toggle`, `Choice`, `Slider`, `Tabs`, `List`, `HintBar`, `Toast` |
+| Widgets | `widgets.hpp` | `Label`, `SectionHeading`, `Button`, `Item` (title, subtitle, value, a source chip, X and Y actions), `Toggle`, `Choice` (list words apart from the row's value), `Slider`, `Tabs`, `List`, `HintBar`, `Toast` |
 | Focus | `focus.hpp` | Spatial choice among boxes: nearest in a direction within a cone, overlap across the direction counting as straight ahead |
 | Screens | `screen.hpp` | `Screen` (build, area, overlay, back, act, hints, initial focus), `Dialog` and `confirm` (the one rule for a step that throws something away), `ChoiceList` |
 | Stack | `navigator.hpp` | `Navigator`: push, pop, replace, clear; input, pointer, text, hints and drawing walk it from the top |
@@ -36,7 +36,9 @@ it is done, never under the widget handling it.
   focus to the nearest one where it stood.
 - One behaviour per widget kind: A presses a button or item and flips a toggle; Left and Right
   step a choice or slider; A opens a choice's options as a list; LB and RB step tabs from anywhere
-  on the screen; focusing a tab chooses it.
+  on the screen; focusing a tab chooses it. X and Y do a row's second and third actions when it
+  names them. A horizontal tab strip wider than its frame scrolls the chosen tab into view; a tab
+  label is never cut short.
 - Back goes to the focused widget, then the screen (`back` may stay and handle it, e.g. to ask
   first), else pops the screen. A press outside an overlay's card is Back.
 - Moving focus into a group lands on its preferred child, else the one it last focused, else its
@@ -45,7 +47,8 @@ it is done, never under the widget handling it.
 - Scrolling eases the focus into view with the section spacing as margin; the first focusable
   reveals the top, the last the end. Focus the pointer moved scrolls nothing.
 - Every hint bar shows the top screen's prompts: the focused widget's, then the screen's ones not
-  already named; Back stands first. A press on a prompt performs its action.
+  already named; Back stands first. A bar too narrow for all of them drops the last ones. A press
+  on a prompt performs its action.
 - Sounds are the app's callbacks for a focus move, an activation and Back.
 
 ## Checking it

@@ -1,4 +1,5 @@
 // Each standard widget's one behaviour, pressed through the navigator as an app would press it.
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -35,7 +36,20 @@ public:
                          std::vector<std::string>{"Grid", "Rail", "Carousel"}, chosen,
                          [this](std::size_t index) {
                            chosen = index;
-                         });
+                         })
+        .chip("Global", false)
+        .onAction(
+            Action::Secondary,
+            [this] {
+              ++followed;
+            },
+            "Go to Global")
+        .onAction(
+            Action::Tertiary,
+            [this] {
+              chosen = 2;
+            },
+            "Use Carousel");
     rows.add<ui::Slider>("slider", ui::Item::Text{"Volume", ""}, ui::Slider::Range{0, 100, 5},
                          level,
                          [this](int now) {
@@ -62,6 +76,31 @@ public:
   int level{50};
   int opened{0};
   int applied{0};
+  int followed{0};
+};
+
+/// A strip of tabs too wide for its frame.
+class Strip final : public ui::Screen {
+public:
+  Strip() : Screen{"strip", "Strip"} {
+  }
+  [[nodiscard]] std::unique_ptr<ui::Widget> build(const ui::Theme & /*theme*/) override {
+    auto root = std::make_unique<ui::Column>();
+    std::vector<ui::Tabs::Tab> tabs;
+    for (const char *name : {"Global", "Super Nintendo", "Game Boy Advance", "Snes9x", "This game",
+                             "Another long name", "And one more"}) {
+      tabs.push_back(ui::Tabs::Tab{name, name});
+    }
+    root->add<ui::Tabs>(
+            "scopes", std::move(tabs), chosen,
+            [this](std::size_t index) {
+              chosen = index;
+            },
+            ui::Orientation::Horizontal)
+        .fixWidth(300.0f);
+    return root;
+  }
+  std::size_t chosen{0};
 };
 
 struct Fixture {
@@ -178,6 +217,47 @@ void buttonAndHintBarPress() {
   expect(!f.rig.navigator.active(), "a press on Back's prompt goes back");
 }
 
+void rowActionsAndChip() {
+  Fixture f;
+  f.rig.navigator.focus("choice");
+  const std::vector<ui::Hint> hints = f.rig.navigator.hints();
+  expect(std::ranges::any_of(hints,
+                             [](const ui::Hint &hint) {
+                               return hint.label == "Go to Global" &&
+                                      hint.keys == std::vector<Action>{Action::Secondary};
+                             }),
+         "a row with a second action prompts it on X");
+  f.rig.navigator.act(Action::Secondary);
+  expect(f.board->followed == 1 && f.board->chosen == 0, "X does the second action only");
+  f.rig.navigator.act(Action::Tertiary);
+  expect(f.board->followed == 1 && f.board->chosen == 2, "Y does the third");
+  const auto *choice = dynamic_cast<const ui::Item *>(f.rig.navigator.find("choice"));
+  expect(choice != nullptr && choice->chipText() == "Global",
+         "a row names where its value is from");
+  f.rig.navigator.focus("toggle");
+  f.rig.navigator.act(Action::Secondary);
+  expect(f.board->followed == 1 && !f.board->on, "X on a row without one does nothing");
+}
+
+void wideTabStripScrolls() {
+  test::Rig rig;
+  auto owned = std::make_unique<Strip>();
+  Strip *chosen = owned.get();
+  rig.navigator.push(std::move(owned));
+  rig.frame();
+  expect(rig.navigator.find("scopes")->clip().has_value(), "a strip wider than its frame clips");
+  for (int i = 0; i < 6; ++i) {
+    rig.navigator.act(Action::NextTab);
+  }
+  for (int i = 0; i < 40; ++i) {
+    rig.frame(0.05);
+  }
+  const Rect strip = rig.navigator.find("scopes")->frame();
+  const Rect last = rig.navigator.find("scopes/And one more")->frame();
+  expect(chosen->chosen == 6 && last.right() <= strip.right() + 0.5f && last.x >= strip.x - 0.5f,
+         "the chosen tab scrolls whole into view");
+}
+
 void toastComesAndGoes() {
   ui::Toast toast;
   toast.show("Saved", false, 10.0, 3.0);
@@ -194,6 +274,8 @@ int main() {
   choicePressesStepOrOpen();
   sliderStepsAndTakesPresses();
   buttonAndHintBarPress();
+  rowActionsAndChip();
+  wideTabStripScrolls();
   toastComesAndGoes();
   std::printf("ui widgets: all checks passed\n");
   return 0;
