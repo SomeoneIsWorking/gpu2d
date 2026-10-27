@@ -24,8 +24,9 @@ library itself never logs.
 | Textures | `include/gpu2d/texture.hpp`, `src/render/texture.cpp` | Upload from RGBA (mipmapped when trilinear) and `TextureView` |
 | Render targets | `include/gpu2d/render_target.hpp`, `include/gpu2d/surface.hpp`, `src/render/render_target.cpp` | Offscreen RGBA8 targets, sampled or read back into a `Bitmap` |
 | Text | `include/gpu2d/text.hpp`, `src/render/text.cpp` | SDL3_ttf GPU text engine: metrics, glyph ink bounds, measuring, drawing with letter spacing, cached shaped runs retired after submit |
+| UI toolkit | `include/gpu2d/ui/`, `src/ui/` ([ui-toolkit.md](ui-toolkit.md)) | `gpu2d::ui`: theme tokens, layout containers, widgets, spatial focus, the screen stack (`Navigator`), dialogs and choice lists, one motion clock, UTF-8 text fitting; app-supplied face, glyphs and sounds |
 | Shader build | `cmake/Gpu2dShaders.cmake` | `gpu2d_compile_shaders(target ...)`: glslc to SPIR-V word lists included by the C++; consumers may reuse it |
-| Tests | `tests/` | `image_test` (PNG round trip, WebP/JPEG decode, refusals, resize), `canvas_test` and `text_test` (pixels drawn offscreen behind a hidden window and read back) |
+| Tests | `tests/` | `image_test` (PNG round trip, WebP/JPEG decode, refusals, resize), `canvas_test` and `text_test` (pixels drawn offscreen behind a hidden window and read back), `ui_layout`, `ui_navigator`, `ui_widgets` (the toolkit with fake text, no GPU) |
 | CI | `.github/workflows/ci.yml` | Fedora container, Clang and Ninja, CTest on Mesa's lavapipe |
 
 ## Data flow

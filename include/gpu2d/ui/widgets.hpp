@@ -1,0 +1,374 @@
+// widgets — the standard widgets, each with one behaviour wherever it is used:
+// - Label and SectionHeading: words; nothing to press.
+// - Button: A presses it.
+// - Item (a settings row: title, subtitle, value): A presses it when it does something; one with
+//   nothing to do is not focusable.
+// - Toggle: A flips it.
+// - Choice: Left and Right step through its options; A opens them as a list.
+// - Slider: Left and Right step it; a press on the track sets it.
+// - Tabs: LB and RB step them from anywhere on the screen; focusing a tab chooses it.
+// - HintBar: the prompts for the focused widget and the screen, never written by hand.
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "gpu2d/ui/layout.hpp"
+#include "gpu2d/ui/widget.hpp"
+
+namespace gpu2d::ui {
+
+enum class TextRole : std::uint8_t { Title, Heading, Body, Caption };
+
+/// Words in one of the theme's sizes, fitted to one line or wrapped.
+class Label : public Widget {
+public:
+  Label(std::string text, TextRole role, bool wraps = false)
+      : text_{std::move(text)}, role_{role}, wraps_{wraps} {
+  }
+  Label &colour(Colour colour) noexcept {
+    colour_ = colour;
+    return *this;
+  }
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void arrange(LayoutContext &context, const Rect &frame) override;
+  void paint(Painter &painter) const override;
+
+private:
+  [[nodiscard]] float sizeDp(const Theme &theme) const noexcept;
+  [[nodiscard]] Colour ink(const Theme &theme) const noexcept;
+
+  std::string text_;
+  TextRole role_;
+  bool wraps_;
+  std::optional<Colour> colour_;
+  std::vector<std::string> lines_;
+};
+
+/// A heading over a group of rows, with the theme's section room above it.
+class SectionHeading : public Widget {
+public:
+  explicit SectionHeading(std::string text) : text_{std::move(text)} {
+  }
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void paint(Painter &painter) const override;
+
+private:
+  std::string text_;
+};
+
+enum class ButtonKind : std::uint8_t { Normal, Primary, Danger };
+
+class Button : public Widget {
+public:
+  Button(std::string id, std::string label, std::function<void()> pressed,
+         ButtonKind kind = ButtonKind::Normal)
+      : Widget{std::move(id)}, label_{std::move(label)}, pressed_{std::move(pressed)}, kind_{kind} {
+  }
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  [[nodiscard]] bool focusable() const override {
+    return true;
+  }
+  [[nodiscard]] float cornerRadius(const Theme &theme) const override;
+  bool act(Action action, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  void paint(Painter &painter) const override;
+
+private:
+  std::string label_;
+  std::function<void()> pressed_;
+  ButtonKind kind_;
+};
+
+/// A row: title, an optional subtitle, and what stands at its end. A plain item shows a value and,
+/// when it opens something, a chevron; Toggle, Choice and Slider put their control there.
+class Item : public Widget {
+public:
+  struct Text {
+    std::string title;
+    std::string subtitle;
+  };
+
+  Item(std::string id, Text text) : Widget{std::move(id)}, text_{std::move(text)} {
+  }
+  /// The value read at the row's end.
+  Item &value(std::string value) {
+    value_ = std::move(value);
+    return *this;
+  }
+  /// What A does, and the hint's word for it; `opens` draws a chevron for a row that leads on.
+  Item &onPress(std::function<void()> pressed, std::string verb = "Select", bool opens = false) {
+    pressed_ = std::move(pressed);
+    verb_ = std::move(verb);
+    opens_ = opens;
+    return *this;
+  }
+  /// Puts a tick at its end: the option chosen in a list.
+  Item &mark(bool marked = true) noexcept {
+    marked_ = marked;
+    return *this;
+  }
+  /// Dims it and takes it out of the focus order.
+  Item &disable(bool disabled = true) noexcept {
+    disabled_ = disabled;
+    return *this;
+  }
+
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void arrange(LayoutContext &context, const Rect &frame) override;
+  [[nodiscard]] bool focusable() const override;
+  [[nodiscard]] float cornerRadius(const Theme &theme) const override;
+  bool act(Action action, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  void paint(Painter &painter) const override;
+
+  [[nodiscard]] const Text &text() const noexcept {
+    return text_;
+  }
+  [[nodiscard]] const std::string &valueText() const noexcept {
+    return value_;
+  }
+
+protected:
+  /// How wide the end's control is, in pixels, for a row `width` wide.
+  [[nodiscard]] virtual float trailingWidth(LayoutContext &context, float width);
+  /// Draws the end's control in `area`.
+  virtual void paintTrailing(Painter &painter, const Rect &area) const;
+  [[nodiscard]] bool interactive() const noexcept {
+    return !disabled_;
+  }
+  [[nodiscard]] bool disabled() const noexcept {
+    return disabled_;
+  }
+  /// The end's area as laid out.
+  [[nodiscard]] const Rect &trailing() const noexcept {
+    return trailing_;
+  }
+
+private:
+  Text text_;
+  std::string value_;
+  std::function<void()> pressed_;
+  std::string verb_;
+  bool opens_{false};
+  bool marked_{false};
+  bool disabled_{false};
+  Rect trailing_;
+  /// The title and subtitle fitted to the room left of the end.
+  std::string titleShown_;
+  std::string subtitleShown_;
+  std::string valueShown_;
+};
+
+class Toggle : public Item {
+public:
+  Toggle(std::string id, Text text, bool on, std::function<void(bool)> changed)
+      : Item{std::move(id), std::move(text)}, on_{on}, changed_{std::move(changed)} {
+  }
+  [[nodiscard]] bool focusable() const override {
+    return interactive();
+  }
+  bool act(Action action, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  [[nodiscard]] bool on() const noexcept {
+    return on_;
+  }
+
+protected:
+  [[nodiscard]] float trailingWidth(LayoutContext &context, float width) override;
+  void paintTrailing(Painter &painter, const Rect &area) const override;
+
+private:
+  bool on_;
+  std::function<void(bool)> changed_;
+};
+
+class Choice : public Item {
+public:
+  /// `chosen` indexes `options`; `changed` gets the index picked.
+  Choice(std::string id, Text text, std::vector<std::string> options, std::size_t chosen,
+         std::function<void(std::size_t)> changed)
+      : Item{std::move(id), std::move(text)}, options_{std::move(options)}, chosen_{chosen},
+        changed_{std::move(changed)} {
+  }
+  [[nodiscard]] bool focusable() const override {
+    return interactive() && !options_.empty();
+  }
+  bool act(Action action, ActContext &context) override;
+  bool press(Point at, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  [[nodiscard]] const std::vector<std::string> &options() const noexcept {
+    return options_;
+  }
+  [[nodiscard]] std::size_t chosen() const noexcept {
+    return chosen_;
+  }
+
+protected:
+  [[nodiscard]] float trailingWidth(LayoutContext &context, float width) override;
+  void paintTrailing(Painter &painter, const Rect &area) const override;
+
+private:
+  /// Moves `step` places, wrapping.
+  void stepBy(int step, ActContext &context);
+  /// Opens the options as a list over the screen.
+  void openList(ActContext &context);
+
+  std::vector<std::string> options_;
+  std::size_t chosen_;
+  std::function<void(std::size_t)> changed_;
+  std::string shown_;
+};
+
+class Slider : public Item {
+public:
+  struct Range {
+    int low{};
+    int high{};
+    int step{1};
+  };
+
+  Slider(std::string id, Text text, Range range, int level, std::function<void(int)> changed)
+      : Item{std::move(id), std::move(text)}, range_{range}, level_{level},
+        changed_{std::move(changed)} {
+  }
+  /// What follows the number ("%").
+  Slider &unit(std::string unit) {
+    unit_ = std::move(unit);
+    return *this;
+  }
+  [[nodiscard]] bool focusable() const override {
+    return interactive();
+  }
+  bool act(Action action, ActContext &context) override;
+  bool press(Point at, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  [[nodiscard]] int level() const noexcept {
+    return level_;
+  }
+
+protected:
+  [[nodiscard]] float trailingWidth(LayoutContext &context, float width) override;
+  void paintTrailing(Painter &painter, const Rect &area) const override;
+
+private:
+  /// The track inside the end's area, laid out.
+  [[nodiscard]] Rect track(const Theme &theme) const noexcept;
+  void set(int level, ActContext &context);
+
+  Range range_;
+  int level_;
+  std::function<void(int)> changed_;
+  std::string unit_;
+};
+
+enum class Orientation : std::uint8_t { Horizontal, Vertical };
+
+/// Tabs choosing what the rest of the screen shows. Each tab is focusable; focusing one chooses
+/// it, and LB and RB step them wherever the focus is.
+class Tabs : public Container {
+public:
+  struct Tab {
+    std::string key;
+    std::string label;
+  };
+
+  Tabs(std::string id, std::vector<Tab> tabs, std::size_t chosen,
+       std::function<void(std::size_t)> chose, Orientation orientation);
+
+  /// The id of tab `key`.
+  [[nodiscard]] std::string tabId(std::string_view key) const;
+  [[nodiscard]] std::size_t chosen() const noexcept {
+    return chosen_;
+  }
+  [[nodiscard]] const std::vector<Tab> &tabs() const noexcept {
+    return tabs_;
+  }
+  /// Chooses the tab `step` places on, stopping at the ends; the id of the tab chosen, or nothing
+  /// when it did not move.
+  std::optional<std::string> step(int step);
+
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void arrange(LayoutContext &context, const Rect &frame) override;
+  [[nodiscard]] bool remembersFocus() const override {
+    return true;
+  }
+  [[nodiscard]] std::optional<std::string> preferredFocus() const override;
+
+private:
+  std::vector<Tab> tabs_;
+  std::size_t chosen_;
+  std::function<void(std::size_t)> chose_;
+  Orientation orientation_;
+};
+
+/// A scrolled column of rows.
+class List : public ScrollView {
+public:
+  List(std::string id, float spacingDp);
+  /// The column the rows go in.
+  [[nodiscard]] Column &rows() noexcept {
+    return *rows_;
+  }
+
+private:
+  Column *rows_;
+};
+
+/// The prompts for what is focused and for the screen, placed by the navigator after layout: the
+/// Back prompt at the start, the rest at the end. A press on a prompt does its action.
+class HintBar : public Widget {
+public:
+  HintBar() = default;
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  [[nodiscard]] bool pressable() const override {
+    return true;
+  }
+  bool press(Point at, ActContext &context) override;
+  void paint(Painter &painter) const override;
+
+  /// Lays `hints` out across the bar.
+  void show(std::vector<Hint> hints, const Theme &theme, Typesetter &text, Prompts &prompts);
+  /// The prompts it shows, in order.
+  [[nodiscard]] std::vector<Hint> shown() const;
+
+private:
+  struct Placed {
+    Hint hint;
+    /// Each key's glyph box, then the label's start.
+    std::vector<Rect> glyphs;
+    float labelX{};
+    Rect whole;
+  };
+  std::vector<Placed> placed_;
+};
+
+/// A short message low on the screen that fades in and out.
+class Toast {
+public:
+  /// Shows `text` from `now` for `seconds`.
+  void show(std::string text, bool error, double now, double seconds);
+  void clear() noexcept;
+  [[nodiscard]] bool visible(double now) const noexcept;
+  [[nodiscard]] const std::string &text() const noexcept {
+    return text_;
+  }
+  [[nodiscard]] bool error() const noexcept {
+    return error_;
+  }
+  /// Draws it centred across `area`, its bottom `area.bottom()`.
+  void paint(Painter &painter, const Rect &area) const;
+
+private:
+  std::string text_;
+  bool error_{false};
+  double shown_{};
+  double until_{};
+};
+
+} // namespace gpu2d::ui

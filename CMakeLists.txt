@@ -70,6 +70,26 @@ target_compile_features(gpu2d_render PUBLIC cxx_std_20)
 target_compile_options(gpu2d_render PRIVATE -Wall -Wextra -Wpedantic)
 set_target_properties(gpu2d_render PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# The UI toolkit: theme, layout, widgets, focus, the screen stack and motion. Title-neutral; the
+# app supplies the theme's values, the face and the button glyphs.
+add_library(gpu2d_ui STATIC
+  src/ui/theme.cpp
+  src/ui/motion.cpp
+  src/ui/text_fit.cpp
+  src/ui/focus.cpp
+  src/ui/widget.cpp
+  src/ui/layout.cpp
+  src/ui/widgets.cpp
+  src/ui/screen.cpp
+  src/ui/navigator.cpp
+)
+add_library(gpu2d::ui ALIAS gpu2d_ui)
+target_include_directories(gpu2d_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(gpu2d_ui PUBLIC gpu2d::render)
+target_compile_features(gpu2d_ui PUBLIC cxx_std_20)
+target_compile_options(gpu2d_ui PRIVATE -Wall -Wextra -Wpedantic)
+set_target_properties(gpu2d_ui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Tests are for developing gpu2d itself; a consumer adding it with add_subdirectory does not
 # build them.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
@@ -97,5 +117,13 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     add_test(NAME canvas COMMAND gpu2d_canvas_test)
     add_test(NAME text
       COMMAND gpu2d_text_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/fonts/CalSans-Regular.ttf")
+
+    # The toolkit through its public headers with a fake face: no GPU.
+    foreach(name layout navigator widgets)
+      add_executable(gpu2d_ui_${name}_test tests/ui/${name}_test.cpp)
+      target_link_libraries(gpu2d_ui_${name}_test PRIVATE gpu2d::ui)
+      target_compile_options(gpu2d_ui_${name}_test PRIVATE -Wall -Wextra -Wpedantic)
+      add_test(NAME ui_${name} COMMAND gpu2d_ui_${name}_test)
+    endforeach()
   endif()
 endif()
