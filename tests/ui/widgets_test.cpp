@@ -67,6 +67,11 @@ public:
     rows.add<ui::Button>("button", "Apply", [this] {
       ++applied;
     });
+    rows.add<ui::Item>("erase", ui::Item::Text{"Erase saves", ""})
+        .onPress([this] {
+          ++erased;
+        })
+        .confirmFirst("Erase saves?", "They cannot be brought back.", "Erase");
     root->add<ui::HintBar>();
     return root;
   }
@@ -77,6 +82,7 @@ public:
   int opened{0};
   int applied{0};
   int followed{0};
+  int erased{0};
 };
 
 /// A strip of tabs too wide for its frame.
@@ -239,6 +245,26 @@ void rowActionsAndChip() {
   expect(f.board->followed == 1 && !f.board->on, "X on a row without one does nothing");
 }
 
+void confirmFirstAsks() {
+  Fixture f;
+  f.rig.navigator.focus("erase");
+  f.rig.navigator.act(Action::Accept);
+  f.rig.frame();
+  const ui::Screen *dialog = f.rig.navigator.top();
+  expect(dialog != nullptr && dialog->title() == "Erase saves?" && f.board->erased == 0,
+         "a row that asks first opens its question");
+  expect(f.rig.navigator.focused() == "dialog/0", "with Cancel focused");
+  f.rig.navigator.act(Action::Accept);
+  f.rig.frame();
+  expect(f.board->erased == 0 && f.rig.navigator.top() == f.board, "Cancel does nothing");
+  f.rig.navigator.act(Action::Accept);
+  f.rig.frame();
+  f.rig.navigator.act(Action::Right);
+  f.rig.navigator.act(Action::Accept);
+  f.rig.frame();
+  expect(f.board->erased == 1 && f.rig.navigator.top() == f.board, "the verb does the press");
+}
+
 void wideTabStripScrolls() {
   test::Rig rig;
   auto owned = std::make_unique<Strip>();
@@ -275,6 +301,7 @@ int main() {
   sliderStepsAndTakesPresses();
   buttonAndHintBarPress();
   rowActionsAndChip();
+  confirmFirstAsks();
   wideTabStripScrolls();
   toastComesAndGoes();
   std::printf("ui widgets: all checks passed\n");

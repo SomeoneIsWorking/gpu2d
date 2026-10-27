@@ -251,8 +251,39 @@ void Navigator::clear() {
   }
 }
 
+void Navigator::closeFrom(const Screen &screen) {
+  const auto at = std::ranges::find_if(stack_, [&screen](const Entry &entry) {
+    return entry.screen.get() == &screen;
+  });
+  for (auto entry = at; entry != stack_.end(); ++entry) {
+    entry->screen->close();
+  }
+  if (busy_ == 0) {
+    dropClosing();
+  }
+}
+
+void Navigator::dropClosing() {
+  for (std::size_t i = stack_.size(); i-- > 0;) {
+    if (stack_[i].screen->closing()) {
+      Entry entry = std::move(stack_[i]);
+      stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(i));
+      entry.presence.to(0.0f, Timing{now_, theme_.motion.screen});
+      entry.leaving = true;
+      leaving_.push_back(std::move(entry));
+    }
+  }
+}
+
 bool Navigator::visible() const noexcept {
   return !stack_.empty() || !leaving_.empty();
+}
+
+bool Navigator::pagesVisible() const noexcept {
+  const auto page = [](const Entry &entry) {
+    return !entry.screen->overlay();
+  };
+  return std::ranges::any_of(stack_, page) || std::ranges::any_of(leaving_, page);
 }
 
 bool Navigator::animating() const noexcept {
@@ -430,20 +461,45 @@ void Navigator::paintEntry(Canvas &canvas, const Entry &entry, bool top) {
   canvas.popTransform();
 }
 
-void Navigator::paint(Canvas &canvas) {
-  if (stack_.empty() && leaving_.empty()) {
-    return;
-  }
+std::size_t Navigator::firstDrawn() const {
   std::size_t first = stack_.empty() ? 0 : stack_.size() - 1;
   while (first > 0 && (stack_[first].screen->overlay() || stack_[first].presence.moving(now_))) {
     --first;
   }
-  for (std::size_t i = first; i < stack_.size(); ++i) {
-    paintEntry(canvas, stack_[i], i + 1 == stack_.size());
+  return first;
+}
+
+void Navigator::paintLayer(Canvas &canvas, bool overlays) {
+  // The overlays are the screens above the highest one that is not.
+  std::size_t pages = 0;
+  for (std::size_t i = 0; i < stack_.size(); ++i) {
+    if (!stack_[i].screen->overlay()) {
+      pages = i + 1;
+    }
+  }
+  for (std::size_t i = firstDrawn(); i < stack_.size(); ++i) {
+    if ((i >= pages) == overlays) {
+      paintEntry(canvas, stack_[i], i + 1 == stack_.size());
+    }
   }
   for (const Entry &entry : leaving_) {
-    paintEntry(canvas, entry, false);
+    if (entry.screen->overlay() == overlays) {
+      paintEntry(canvas, entry, false);
+    }
   }
+}
+
+void Navigator::paint(Canvas &canvas) {
+  paintPages(canvas);
+  paintOverlays(canvas);
+}
+
+void Navigator::paintPages(Canvas &canvas) {
+  paintLayer(canvas, false);
+}
+
+void Navigator::paintOverlays(Canvas &canvas) {
+  paintLayer(canvas, true);
 }
 
 void Navigator::play(const std::function<void()> &sound) const {
@@ -599,15 +655,7 @@ void Navigator::settle(Context &context) {
     focusOn(entry, *context.focusTo, false);
     context.focusTo.reset();
   }
-  for (std::size_t i = stack_.size(); i-- > 0;) {
-    if (stack_[i].screen->closing()) {
-      Entry entry = std::move(stack_[i]);
-      stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(i));
-      entry.presence.to(0.0f, Timing{now_, theme_.motion.screen});
-      entry.leaving = true;
-      leaving_.push_back(std::move(entry));
-    }
-  }
+  dropClosing();
   std::vector<Deferred> deferred = std::move(deferred_);
   deferred_.clear();
   for (Deferred &op : deferred) {

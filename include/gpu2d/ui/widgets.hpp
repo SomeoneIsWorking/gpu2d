@@ -109,6 +109,12 @@ public:
     opens_ = opens;
     return *this;
   }
+  /// Makes A ask first: a `confirm` dialog titled `question`, saying `detail`, whose `verb` button
+  /// does the press. For a step that throws something away or cannot be undone.
+  Item &confirmFirst(std::string question, std::string detail, std::string verb) {
+    confirm_ = Confirm{std::move(question), std::move(detail), std::move(verb)};
+    return *this;
+  }
   /// A short pill before the end naming where the value comes from; `strong` when the row's own.
   Item &chip(std::string text, bool strong) {
     chip_ = std::move(text);
@@ -175,6 +181,12 @@ private:
   std::function<void()> pressed_;
   std::string verb_;
   bool opens_{false};
+  struct Confirm {
+    std::string question;
+    std::string detail;
+    std::string verb;
+  };
+  std::optional<Confirm> confirm_;
   bool marked_{false};
   bool disabled_{false};
   std::string chip_;
@@ -345,6 +357,19 @@ private:
   std::size_t chosen_;
   std::function<void(std::size_t)> chose_;
   Orientation orientation_;
+};
+
+/// How far something has got: a thin bar filled from the left.
+class Progress : public Widget {
+public:
+  /// `fraction` is 0 to 1.
+  explicit Progress(float fraction) noexcept : fraction_{fraction} {
+  }
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void paint(Painter &painter) const override;
+
+private:
+  float fraction_;
 };
 
 /// A scrolled column of rows.

@@ -97,7 +97,15 @@ private:
 class Card : public Column {
 public:
   using Column::Column;
+  /// Drawn as a row is, for a card that stands on another card.
+  Card &raised(bool raised = true) noexcept {
+    raised_ = raised;
+    return *this;
+  }
   void paint(Painter &painter) const override;
+
+private:
+  bool raised_{false};
 };
 
 /// A column on the theme's ground, the root of a screen that covers what is under it.
