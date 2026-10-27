@@ -25,6 +25,9 @@ constexpr float strokeDp = 2.2f;
 constexpr float trailingShare = 0.45f;
 /// A button's height, in dp.
 constexpr float buttonHeightDp = 52.0f;
+/// A chip's height and its widest, in dp.
+constexpr float chipHeightDp = 26.0f;
+constexpr float chipMaxWidthDp = 220.0f;
 /// Glyphs in the hint bar against the hint text size.
 constexpr float glyphShare = 1.55f;
 /// A chevron pointing `sign` (1 right, -1 left) with its tip at `tipX`.
@@ -226,8 +229,22 @@ void Item::arrange(LayoutContext &context, const Rect &frame) {
   const float pad = theme.px(theme.spacing.pad);
   const float end = trailingWidth(context, frame.width - 2.0f * pad);
   trailing_ = Rect{frame.right() - pad - end, frame.y, end, frame.height};
-  const float room = std::max(0.0f, frame.width - 2.0f * pad - end -
-                                        (end > 0.0f ? theme.px(theme.spacing.pad) : 0.0f));
+  float room = std::max(0.0f, frame.width - 2.0f * pad - end -
+                                  (end > 0.0f ? theme.px(theme.spacing.pad) : 0.0f));
+  chipBox_ = Rect{};
+  chipShown_.clear();
+  if (!chip_.empty()) {
+    const float size = theme.px(theme.type.caption);
+    const float inset = theme.px(theme.spacing.gap * 1.5f);
+    const float widest = std::min(theme.px(chipMaxWidthDp), room * 0.5f);
+    chipShown_ = fitted(context.text, chip_, std::max(0.0f, widest - 2.0f * inset), size);
+    const float width = context.text.measure(chipShown_, size) + 2.0f * inset;
+    const float height = theme.px(chipHeightDp);
+    const float right =
+        end > 0.0f ? trailing_.x - theme.px(theme.spacing.gap * 2.0f) : frame.right() - pad;
+    chipBox_ = Rect{right - width, frame.y + (frame.height - height) * 0.5f, width, height};
+    room = std::max(0.0f, room - width - theme.px(theme.spacing.gap * 2.0f));
+  }
   titleShown_ = fitted(context.text, text_.title, room, theme.px(theme.type.body));
   subtitleShown_ = fitted(context.text, text_.subtitle, room, theme.px(theme.type.caption));
   const float chevronRoom = opens_ ? theme.px(chevronDp * 2.0f + theme.spacing.gap * 2.0f) : 0.0f;
@@ -245,17 +262,40 @@ float Item::cornerRadius(const Theme &theme) const {
 
 bool Item::act(Action action, ActContext & /*context*/) {
   if (action != Action::Accept || !pressed_ || disabled_) {
-    return false;
+    return actExtra(action);
   }
   pressed_();
   return true;
+}
+
+bool Item::actExtra(Action action) {
+  if (disabled_) {
+    return false;
+  }
+  const auto extra = std::ranges::find(extras_, action, &Extra::key);
+  if (extra == extras_.end() || !extra->action) {
+    return false;
+  }
+  extra->action();
+  return true;
+}
+
+void Item::addExtraHints(std::vector<Hint> &hints) const {
+  if (disabled_) {
+    return;
+  }
+  for (const Extra &extra : extras_) {
+    hints.push_back(Hint{{extra.key}, extra.verb});
+  }
 }
 
 std::vector<Hint> Item::hints() const {
   if (!pressed_ || disabled_) {
     return {};
   }
-  return {Hint{{Action::Accept}, verb_}};
+  std::vector<Hint> hints{Hint{{Action::Accept}, verb_}};
+  addExtraHints(hints);
+  return hints;
 }
 
 void Item::paintTrailing(Painter &painter, const Rect &area) const {
@@ -298,6 +338,20 @@ void Item::paint(Painter &painter) const {
     painter.label(subtitleShown_, Point{x, top + title + gap + subtitle * 0.5f}, theme.type.caption,
                   theme.colours.inkMuted);
   }
+  if (!chipShown_.empty()) {
+    const float radius = chipBox_.height * 0.5f;
+    if (chipStrong_) {
+      painter.canvas.fillRoundRect(chipBox_, radius, painter.fade(theme.colours.accent));
+    } else {
+      painter.canvas.strokeRoundRect(chipBox_, radius, painter.px(theme.shape.outline),
+                                     painter.fade(theme.colours.inkFaint));
+    }
+    const float width = painter.text.measure(chipShown_, painter.px(theme.type.caption));
+    painter.label(
+        chipShown_,
+        Point{chipBox_.x + (chipBox_.width - width) * 0.5f, chipBox_.y + chipBox_.height * 0.5f},
+        theme.type.caption, chipStrong_ ? theme.colours.onAccent : theme.colours.inkMuted);
+  }
   if (trailing_.width > 0.0f) {
     paintTrailing(painter, trailing_);
   }
@@ -312,7 +366,7 @@ float Toggle::trailingWidth(LayoutContext &context, float /*width*/) {
 
 bool Toggle::act(Action action, ActContext & /*context*/) {
   if (action != Action::Accept || !interactive()) {
-    return false;
+    return actExtra(action);
   }
   on_ = !on_;
   if (changed_) {
@@ -322,7 +376,9 @@ bool Toggle::act(Action action, ActContext & /*context*/) {
 }
 
 std::vector<Hint> Toggle::hints() const {
-  return {Hint{{Action::Accept}, on_ ? "Turn off" : "Turn on"}};
+  std::vector<Hint> hints{Hint{{Action::Accept}, on_ ? "Turn off" : "Turn on"}};
+  addExtraHints(hints);
+  return hints;
 }
 
 void Toggle::paintTrailing(Painter &painter, const Rect &area) const {
@@ -369,7 +425,8 @@ void Choice::stepBy(int step, ActContext &context) {
 }
 
 void Choice::openList(ActContext &context) {
-  context.push(std::make_unique<ChoiceList>(text().title, options_, chosen_, changed_));
+  context.push(std::make_unique<ChoiceList>(
+      text().title, listed_.size() == options_.size() ? listed_ : options_, chosen_, changed_));
 }
 
 bool Choice::act(Action action, ActContext &context) {
@@ -387,7 +444,7 @@ bool Choice::act(Action action, ActContext &context) {
     openList(context);
     return true;
   default:
-    return false;
+    return actExtra(action);
   }
 }
 
@@ -407,7 +464,10 @@ bool Choice::press(Point at, ActContext &context) {
 }
 
 std::vector<Hint> Choice::hints() const {
-  return {Hint{{Action::Left, Action::Right}, "Change"}, Hint{{Action::Accept}, "Choose"}};
+  std::vector<Hint> hints{Hint{{Action::Left, Action::Right}, "Change"},
+                          Hint{{Action::Accept}, "Choose"}};
+  addExtraHints(hints);
+  return hints;
 }
 
 void Choice::paintTrailing(Painter &painter, const Rect &area) const {
@@ -459,7 +519,7 @@ bool Slider::act(Action action, ActContext &context) {
     set(level_ + (action == Action::Left ? -range_.step : range_.step), context);
     return true;
   }
-  return false;
+  return actExtra(action);
 }
 
 bool Slider::press(Point at, ActContext &context) {
@@ -478,7 +538,9 @@ bool Slider::press(Point at, ActContext &context) {
 }
 
 std::vector<Hint> Slider::hints() const {
-  return {Hint{{Action::Left, Action::Right}, "Adjust"}};
+  std::vector<Hint> hints{Hint{{Action::Left, Action::Right}, "Adjust"}};
+  addExtraHints(hints);
+  return hints;
 }
 
 void Slider::paintTrailing(Painter &painter, const Rect &area) const {
@@ -512,15 +574,18 @@ public:
   }
   [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override {
     const Theme &theme = context.theme;
-    const float text = context.text.measure(label_, theme.px(theme.type.body));
-    const float width = orientation_ == Orientation::Vertical
-                            ? maxWidth
-                            : std::min(maxWidth, text + theme.px(theme.spacing.pad) * 2.0f);
+    const float width =
+        orientation_ == Orientation::Vertical ? maxWidth : std::min(maxWidth, wholeWidth(context));
     return Size{width, theme.px(theme.spacing.compactRowHeight)};
   }
   void arrange(LayoutContext &context, const Rect &frame) override {
     frame_ = frame;
     const Theme &theme = context.theme;
+    // Compared with the measured width itself: subtracting the padding back loses float precision.
+    if (frame.width >= wholeWidth(context)) {
+      shown_ = label_;
+      return;
+    }
     shown_ = fitted(context.text, label_, frame.width - theme.px(theme.spacing.pad) * 2.0f,
                     theme.px(theme.type.body));
   }
@@ -576,6 +641,12 @@ public:
   }
 
 private:
+  [[nodiscard]] float wholeWidth(LayoutContext &context) const {
+    const Theme &theme = context.theme;
+    return context.text.measure(label_, theme.px(theme.type.body)) +
+           theme.px(theme.spacing.pad) * 2.0f;
+  }
+
   std::string label_;
   bool chosen_;
   Orientation orientation_;
@@ -622,6 +693,13 @@ std::optional<std::string> Tabs::step(int step) {
   return tabId(tabs_[next].key);
 }
 
+std::optional<Rect> Tabs::clip() const {
+  if (!overflows_) {
+    return std::nullopt;
+  }
+  return frame_;
+}
+
 std::optional<std::string> Tabs::preferredFocus() const {
   if (tabs_.empty()) {
     return std::nullopt;
@@ -655,6 +733,35 @@ void Tabs::arrange(LayoutContext &context, const Rect &frame) {
   const Theme &theme = context.theme;
   const Rect area = inner(theme, frame);
   float at = orientation_ == Orientation::Vertical ? area.y : area.x;
+  overflows_ = false;
+  if (orientation_ == Orientation::Horizontal && !children_.empty()) {
+    // The strip scrolls so the chosen tab stands whole inside the frame.
+    float total = 0.0f;
+    float chosenStart = 0.0f;
+    float chosenEnd = 0.0f;
+    for (std::size_t i = 0; i < children_.size(); ++i) {
+      const float width = children_[i]->measure(context, area.width).width;
+      if (i == chosen_) {
+        chosenStart = total;
+        chosenEnd = total + width;
+      }
+      total += width + (i + 1 < children_.size() ? theme.px(spacing_) : 0.0f);
+    }
+    overflows_ = total > area.width + 0.5f;
+    ViewState::Scroll &scroll = context.state.scroll(id());
+    scroll.viewport = area.width;
+    scroll.limit = std::max(0.0f, total - area.width);
+    float target = std::clamp(scroll.offset.target(), 0.0f, scroll.limit);
+    const float margin = theme.px(theme.spacing.pad);
+    if (chosenStart - margin < target) {
+      target = std::max(0.0f, chosenStart - margin);
+    } else if (chosenEnd + margin > target + area.width) {
+      target = std::min(scroll.limit, chosenEnd + margin - area.width);
+    }
+    scroll.offset.aim(overflows_ ? target : 0.0f);
+    at -= std::clamp(scroll.offset.step(Timing{context.now, theme.motion.scroll}), 0.0f,
+                     scroll.limit);
+  }
   for (const std::unique_ptr<Widget> &tab : children_) {
     const Size size = tab->measure(context, area.width);
     if (orientation_ == Orientation::Vertical) {
@@ -718,6 +825,16 @@ void HintBar::show(std::vector<Hint> hints, const Theme &theme, Typesetter &text
     shift(placed, x);
     x += placed.whole.width + between;
     placed_.push_back(std::move(placed));
+  }
+  // A bar too narrow for every prompt drops the last ones, the screen's own, first.
+  const float room = frame_.right() - pad - x;
+  float needed = 0.0f;
+  for (const Placed &placed : end) {
+    needed += placed.whole.width + between;
+  }
+  while (!end.empty() && needed - between > room) {
+    needed -= end.back().whole.width + between;
+    end.pop_back();
   }
   x = frame_.right() - pad;
   for (auto placed = end.rbegin(); placed != end.rend(); ++placed) {

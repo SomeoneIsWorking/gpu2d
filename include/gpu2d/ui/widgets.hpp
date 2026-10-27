@@ -1,8 +1,9 @@
 // widgets — the standard widgets, each with one behaviour wherever it is used:
 // - Label and SectionHeading: words; nothing to press.
 // - Button: A presses it.
-// - Item (a settings row: title, subtitle, value): A presses it when it does something; one with
-//   nothing to do is not focusable.
+// - Item (a settings row: title, subtitle, value, an optional chip naming where the value comes
+//   from): A presses it when it does something; one with nothing to do is not focusable. X and Y
+//   do the row's second and third actions when it has them, on every kind of row.
 // - Toggle: A flips it.
 // - Choice: Left and Right step through its options; A opens them as a list.
 // - Slider: Left and Right step it; a press on the track sets it.
@@ -108,6 +109,17 @@ public:
     opens_ = opens;
     return *this;
   }
+  /// A short pill before the end naming where the value comes from; `strong` when the row's own.
+  Item &chip(std::string text, bool strong) {
+    chip_ = std::move(text);
+    chipStrong_ = strong;
+    return *this;
+  }
+  /// What `key` (Secondary or Tertiary) does, and the hint's word for it.
+  Item &onAction(Action key, std::function<void()> action, std::string verb) {
+    extras_.push_back(Extra{key, std::move(action), std::move(verb)});
+    return *this;
+  }
   /// Puts a tick at its end: the option chosen in a list.
   Item &mark(bool marked = true) noexcept {
     marked_ = marked;
@@ -133,8 +145,15 @@ public:
   [[nodiscard]] const std::string &valueText() const noexcept {
     return value_;
   }
+  [[nodiscard]] const std::string &chipText() const noexcept {
+    return chip_;
+  }
 
 protected:
+  /// The row's own action for `action` (X, Y), when it has one; false otherwise.
+  bool actExtra(Action action);
+  /// The prompts of those actions.
+  void addExtraHints(std::vector<Hint> &hints) const;
   /// How wide the end's control is, in pixels, for a row `width` wide.
   [[nodiscard]] virtual float trailingWidth(LayoutContext &context, float width);
   /// Draws the end's control in `area`.
@@ -158,7 +177,17 @@ private:
   bool opens_{false};
   bool marked_{false};
   bool disabled_{false};
+  std::string chip_;
+  bool chipStrong_{false};
+  struct Extra {
+    Action key;
+    std::function<void()> action;
+    std::string verb;
+  };
+  std::vector<Extra> extras_;
   Rect trailing_;
+  Rect chipBox_;
+  std::string chipShown_;
   /// The title and subtitle fitted to the room left of the end.
   std::string titleShown_;
   std::string subtitleShown_;
@@ -196,6 +225,12 @@ public:
       : Item{std::move(id), std::move(text)}, options_{std::move(options)}, chosen_{chosen},
         changed_{std::move(changed)} {
   }
+  /// Words for the options in the list A opens, where they say more than the row's value
+  /// ("Use 4:3 from Global" for a value read as "4:3"); one per option.
+  Choice &listAs(std::vector<std::string> labels) {
+    listed_ = std::move(labels);
+    return *this;
+  }
   [[nodiscard]] bool focusable() const override {
     return interactive() && !options_.empty();
   }
@@ -220,6 +255,7 @@ private:
   void openList(ActContext &context);
 
   std::vector<std::string> options_;
+  std::vector<std::string> listed_;
   std::size_t chosen_;
   std::function<void(std::size_t)> changed_;
   std::string shown_;
@@ -270,7 +306,8 @@ private:
 enum class Orientation : std::uint8_t { Horizontal, Vertical };
 
 /// Tabs choosing what the rest of the screen shows. Each tab is focusable; focusing one chooses
-/// it, and LB and RB step them wherever the focus is.
+/// it, and LB and RB step them wherever the focus is. A horizontal strip wider than its frame
+/// scrolls the chosen tab into view rather than cutting a label short.
 class Tabs : public Container {
 public:
   struct Tab {
@@ -299,9 +336,12 @@ public:
     return true;
   }
   [[nodiscard]] std::optional<std::string> preferredFocus() const override;
+  [[nodiscard]] std::optional<Rect> clip() const override;
 
 private:
   std::vector<Tab> tabs_;
+  /// A horizontal strip is wider than its frame.
+  bool overflows_{false};
   std::size_t chosen_;
   std::function<void(std::size_t)> chose_;
   Orientation orientation_;
