@@ -126,7 +126,7 @@ private:
 };
 
 /// The one rule for a step that throws something away or cannot be undone: a dialog naming it,
-/// with Cancel focused.
+/// with its action focused, so A, A does the step and Back or Cancel keeps things as they are.
 [[nodiscard]] std::unique_ptr<Dialog> confirm(std::string title, std::string body,
                                               std::string action, std::function<void()> confirmed);
 

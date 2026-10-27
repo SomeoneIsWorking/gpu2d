@@ -76,7 +76,7 @@ std::unique_ptr<Dialog> confirm(std::string title, std::string body, std::string
   std::vector<Dialog::Choice> choices{
       Dialog::Choice{"Cancel", {}, ButtonKind::Normal},
       Dialog::Choice{std::move(action), std::move(confirmed), ButtonKind::Danger}};
-  return std::make_unique<Dialog>(std::move(title), std::move(body), std::move(choices), 0);
+  return std::make_unique<Dialog>(std::move(title), std::move(body), std::move(choices), 1);
 }
 
 std::unique_ptr<Widget> ChoiceList::build(const Theme &theme) {

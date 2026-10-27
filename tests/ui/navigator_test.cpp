@@ -247,8 +247,7 @@ void dialogsConfirmAndCallbacksPushSafely() {
     rig.navigator.push(std::make_unique<Pages>());
   }));
   rig.frame();
-  expect(rig.navigator.focused() == "dialog/0", "a confirmation opens on Cancel");
-  rig.navigator.act(Action::Right);
+  expect(rig.navigator.focused() == "dialog/1", "a confirmation opens on its action");
   rig.navigator.act(Action::Accept);
   expect(removed == 1, "the confirming button does its one thing");
   const std::vector<const ui::Screen *> screens = rig.navigator.screens();
@@ -334,7 +333,7 @@ void anOverlayNamesItsPromptsOnTheBarBelow() {
   const std::vector<ui::Hint> shown = pages.bar->shown();
   // Back stands first on a bar.
   expect(shown.size() == 2 && shown[0].keys.front() == Action::Back &&
-             shown[1].keys.front() == Action::Accept && shown[1].label == "Cancel",
+             shown[1].keys.front() == Action::Accept && shown[1].label == "Remove",
          "the bar under a dialog names what the dialog's focus does");
 }
 

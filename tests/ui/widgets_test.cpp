@@ -253,13 +253,12 @@ void confirmFirstAsks() {
   const ui::Screen *dialog = f.rig.navigator.top();
   expect(dialog != nullptr && dialog->title() == "Erase saves?" && f.board->erased == 0,
          "a row that asks first opens its question");
-  expect(f.rig.navigator.focused() == "dialog/0", "with Cancel focused");
+  expect(f.rig.navigator.focused() == "dialog/1", "with its verb focused");
+  f.rig.navigator.act(Action::Back);
+  f.rig.frame();
+  expect(f.board->erased == 0 && f.rig.navigator.top() == f.board, "Back does nothing");
   f.rig.navigator.act(Action::Accept);
   f.rig.frame();
-  expect(f.board->erased == 0 && f.rig.navigator.top() == f.board, "Cancel does nothing");
-  f.rig.navigator.act(Action::Accept);
-  f.rig.frame();
-  f.rig.navigator.act(Action::Right);
   f.rig.navigator.act(Action::Accept);
   f.rig.frame();
   expect(f.board->erased == 1 && f.rig.navigator.top() == f.board, "the verb does the press");

@@ -41,7 +41,7 @@ it is done, never under the widget handling it.
   on the screen; focusing a tab chooses it. X and Y do a row's second and third actions when it
   names them. A horizontal tab strip wider than its frame scrolls the chosen tab into view; a tab
   label is never cut short.
-- A step that throws something away asks first, one rule: `confirm` (Cancel focused); an item's
+- A step that throws something away asks first, one rule: `confirm` (the action focused: A, A does it; Back cancels); an item's
   `confirmFirst` puts it in front of its A.
 - Back goes to the focused widget, then the screen (`back` may stay and handle it, e.g. to ask
   first), else pops the screen. A press outside an overlay's card is Back.
