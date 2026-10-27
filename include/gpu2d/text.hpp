@@ -1,9 +1,10 @@
-// text — a face file through SDL3_ttf, FreeType and HarfBuzz, drawn from SDL3_ttf's GPU glyph
-// atlas. Sizes are the em in pixels; letter spacing is in ems, added half before and half after
-// each character.
+// text — a face file shaped by HarfBuzz and rasterised into SDL3_ttf's GPU glyph atlas. Sizes are
+// the em in pixels; letter spacing is in ems, added half before and half after each character.
 //
-// A label's shaped glyphs stay cached while every frame draws it. SDL3_ttf reuses a released
-// glyph's atlas cell at once, so labels are released only by `retire`, after the frame that last
+// HarfBuzz lays a label out at fractional pen positions and each character is drawn at its own:
+// SDL3_ttf's layout puts every glyph on a whole pixel, which at small sizes swallows a narrow
+// space. A character's glyphs stay cached while every frame draws them. SDL3_ttf reuses a released
+// glyph's atlas cell at once, so they are released only by `retire`, after the frame that last
 // drew them was submitted.
 #pragma once
 
@@ -13,11 +14,12 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <SDL3/SDL_gpu.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <hb.h>
 
 #include "gpu2d/canvas.hpp"
 #include "gpu2d/geometry.hpp"
@@ -97,9 +99,28 @@ private:
   struct TextDestroy {
     void operator()(TTF_Text *text) const noexcept;
   };
+  struct ShaperFaceDestroy {
+    void operator()(hb_face_t *face) const noexcept;
+  };
+  struct ShaperFontDestroy {
+    void operator()(hb_font_t *font) const noexcept;
+  };
   using Font = std::unique_ptr<TTF_Font, FontClose>;
+  using ShaperFont = std::unique_ptr<hb_font_t, ShaperFontDestroy>;
 
-  /// One atlas texture's share of a label: white vertices relative to the line box's top-left.
+  /// One character (a HarfBuzz cluster) of a laid-out label and where its pen stands.
+  struct Placed {
+    std::string_view cluster;
+    float pen{};
+  };
+  struct Layout {
+    std::vector<Placed> characters;
+    /// The label's advance, letter spacing included.
+    float advance{};
+  };
+
+  /// One atlas texture's share of a character: white vertices relative to its pen at the line
+  /// box's top.
   struct Sequence {
     SDL_GPUTexture *atlas{};
     std::vector<Vertex> vertices;
@@ -111,17 +132,21 @@ private:
     bool drawn{false};
     bool shaped{false};
   };
-  /// Size in quarter pixels, tracking in thousandths of an em, then the text.
-  using RunKey = std::tuple<int, int, std::string>;
+  /// Size in quarter pixels, then the character.
+  using RunKey = std::pair<int, std::string>;
 
   [[nodiscard]] TTF_Font *font(float size);
-  [[nodiscard]] Run &run(std::string_view text, const TextStyle &style);
+  [[nodiscard]] hb_font_t *shaper(float size);
+  [[nodiscard]] Layout layout(std::string_view text, const TextStyle &style);
+  [[nodiscard]] Run &run(std::string_view cluster, float size);
 
   std::filesystem::path face_;
   FaceOptions options_;
   bool ttfUp_{false};
   TTF_TextEngine *engine_{};
+  std::unique_ptr<hb_face_t, ShaperFaceDestroy> shaperFace_;
   std::map<int, Font> fonts_;
+  std::map<int, ShaperFont> shapers_;
   std::map<RunKey, Run> runs_;
 };
 

@@ -12,14 +12,16 @@ include(Gpu2dShaders)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GPU2D_SDL3 IMPORTED_TARGET GLOBAL sdl3>=3.2)
 pkg_check_modules(GPU2D_SDL3_TTF IMPORTED_TARGET GLOBAL sdl3-ttf>=3.2)
+pkg_check_modules(GPU2D_HARFBUZZ IMPORTED_TARGET GLOBAL harfbuzz>=2.8.2)
 pkg_check_modules(GPU2D_SDL3_IMAGE IMPORTED_TARGET GLOBAL sdl3-image>=3.2)
 pkg_check_modules(GPU2D_PNG IMPORTED_TARGET GLOBAL libpng)
-if(NOT GPU2D_SDL3_FOUND OR NOT GPU2D_SDL3_TTF_FOUND OR NOT GPU2D_SDL3_IMAGE_FOUND
-   OR NOT GPU2D_PNG_FOUND)
+if(NOT GPU2D_SDL3_FOUND OR NOT GPU2D_SDL3_TTF_FOUND OR NOT GPU2D_HARFBUZZ_FOUND
+   OR NOT GPU2D_SDL3_IMAGE_FOUND OR NOT GPU2D_PNG_FOUND)
   message(FATAL_ERROR
-    "gpu2d needs SDL3, SDL3_ttf, SDL3_image and libpng development files. Install them with "
-    "`sudo dnf install SDL3-devel SDL3_ttf-devel SDL3_image-devel libpng-devel` (Fedora); on "
-    "Ubuntu 24.04 build SDL3, SDL3_ttf and SDL3_image from source")
+    "gpu2d needs SDL3, SDL3_ttf, HarfBuzz, SDL3_image and libpng development files. Install them "
+    "with `sudo dnf install SDL3-devel SDL3_ttf-devel harfbuzz-devel SDL3_image-devel "
+    "libpng-devel` (Fedora); on Ubuntu 24.04 `sudo apt install libharfbuzz-dev libpng-dev` and "
+    "build SDL3, SDL3_ttf and SDL3_image from source")
 endif()
 
 # Images without a GPU: decoding, resizing and PNG encoding.
@@ -65,7 +67,7 @@ gpu2d_compile_shaders(gpu2d_render
   src/shaders/blur.vert src/shaders/blur_horizontal.frag src/shaders/blur_vertical.frag)
 target_include_directories(gpu2d_render PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(gpu2d_render
-  PUBLIC PkgConfig::GPU2D_SDL3 PkgConfig::GPU2D_SDL3_TTF gpu2d::image)
+  PUBLIC PkgConfig::GPU2D_SDL3 PkgConfig::GPU2D_SDL3_TTF PkgConfig::GPU2D_HARFBUZZ gpu2d::image)
 target_compile_features(gpu2d_render PUBLIC cxx_std_20)
 target_compile_options(gpu2d_render PRIVATE -Wall -Wextra -Wpedantic)
 set_target_properties(gpu2d_render PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -22,7 +22,7 @@ jobs:
       - name: Install native verification tools
         run: >-
           dnf install -y git clang clang-tools-extra cmake ninja-build glslc pkgconf-pkg-config
-          SDL3-devel SDL3_ttf-devel SDL3_image-devel libpng-devel libwebp-devel libjpeg-turbo
+          SDL3-devel SDL3_ttf-devel harfbuzz-devel SDL3_image-devel libpng-devel libwebp-devel libjpeg-turbo
           libX11-devel mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth which
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
