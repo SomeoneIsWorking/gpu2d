@@ -263,6 +263,30 @@ void dialogsConfirmAndCallbacksPushSafely() {
   expect(removed == 1 && rig.navigator.top() == &pages, "Back cancels a confirmation");
 }
 
+void closeFromTakesTheScreensAbove() {
+  test::Rig rig;
+  auto base = std::make_unique<Pages>();
+  const Pages &bottom = *base;
+  rig.navigator.push(std::move(base));
+  auto middle = std::make_unique<Pages>();
+  const Pages &menu = *middle;
+  rig.navigator.push(std::move(middle));
+  rig.frame();
+  // A confirmation whose button closes the menu under it, as a menu entry that asks first does.
+  rig.navigator.push(ui::confirm("Close it?", "", "Close", [&] {
+    rig.navigator.closeFrom(menu);
+  }));
+  rig.frame();
+  rig.navigator.act(Action::Right);
+  rig.navigator.act(Action::Accept);
+  const std::vector<const ui::Screen *> screens = rig.navigator.screens();
+  expect(screens.size() == 1 && screens[0] == &bottom,
+         "closing from a screen while handling input takes it and all above, nothing below");
+  rig.navigator.push(std::make_unique<Pages>());
+  rig.navigator.closeFrom(bottom);
+  expect(!rig.navigator.active(), "outside input it closes at once");
+}
+
 /// Facts with one button above them: nothing below the button takes focus.
 class Facts final : public ui::Screen {
 public:
@@ -353,6 +377,7 @@ int main() {
   pointerHoversPressesAndScrolls();
   hintsComeFromTheFocusedWidget();
   dialogsConfirmAndCallbacksPushSafely();
+  closeFromTakesTheScreensAbove();
   ringFollowsTheFocus();
   downPastTheLastFocusableScrolls();
   anOverlayNamesItsPromptsOnTheBarBelow();

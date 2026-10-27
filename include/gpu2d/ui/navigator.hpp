@@ -64,6 +64,8 @@ public:
   void replace(std::unique_ptr<Screen> screen);
   /// Pops every screen.
   void clear();
+  /// Closes `screen` and every screen above it; asked while input is handled, once it is done.
+  void closeFrom(const Screen &screen);
 
   /// Whether any screen is open.
   [[nodiscard]] bool active() const noexcept {
@@ -71,6 +73,8 @@ public:
   }
   /// Whether anything is drawn, which includes screens fading out.
   [[nodiscard]] bool visible() const noexcept;
+  /// Whether a screen that is not an overlay is drawn, fading out included.
+  [[nodiscard]] bool pagesVisible() const noexcept;
   /// Whether something is still moving.
   [[nodiscard]] bool animating() const noexcept;
   [[nodiscard]] Screen *top() noexcept;
@@ -82,6 +86,10 @@ public:
   void layout(const Rect &viewport);
   /// Draws them; after `layout`.
   void paint(Canvas &canvas);
+  /// Draws the screens up to the highest one that is not an overlay, for an app that draws its
+  /// own chrome over pages and under overlays; `paintOverlays` then draws the rest.
+  void paintPages(Canvas &canvas);
+  void paintOverlays(Canvas &canvas);
 
   /// An action for the top screen; true when something took it.
   bool act(Action action);
@@ -129,8 +137,15 @@ private:
   void reveal(Entry &entry);
   /// Applies what the handled input asked for.
   void settle(Context &context);
+  /// Moves the screens that asked to close to the leaving ones.
+  void dropClosing();
   void play(const std::function<void()> &sound) const;
   void paintEntry(Canvas &canvas, const Entry &entry, bool top);
+  /// The lowest screen drawn: the top one, or below it while it is an overlay or still moving.
+  [[nodiscard]] std::size_t firstDrawn() const;
+  /// Draws the drawn screens and the leaving ones that are overlays when `overlays` is set, else
+  /// those that are not.
+  void paintLayer(Canvas &canvas, bool overlays);
   /// Shows the top screen's prompts on every open screen's hint bar.
   void placeHints();
   /// `entry`'s prompts: its focused widget's, then the screen's not already given.

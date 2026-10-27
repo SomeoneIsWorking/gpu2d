@@ -214,8 +214,13 @@ void Grid::arrange(LayoutContext &context, const Rect &frame) {
 
 void Card::paint(Painter &painter) const {
   const Theme &theme = painter.theme;
-  painter.canvas.fillRoundRect(frame_, theme.px(theme.shape.radius) * 1.25f,
-                               painter.fade(theme.colours.surface));
+  if (raised_) {
+    painter.canvas.fillRoundRect(frame_, theme.px(theme.shape.radius),
+                                 painter.fade(theme.colours.control));
+  } else {
+    painter.canvas.fillRoundRect(frame_, theme.px(theme.shape.radius) * 1.25f,
+                                 painter.fade(theme.colours.surface));
+  }
   paintChildren(painter);
 }
 

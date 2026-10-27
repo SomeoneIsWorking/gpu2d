@@ -260,9 +260,13 @@ float Item::cornerRadius(const Theme &theme) const {
   return rowRadius(theme);
 }
 
-bool Item::act(Action action, ActContext & /*context*/) {
+bool Item::act(Action action, ActContext &context) {
   if (action != Action::Accept || !pressed_ || disabled_) {
     return actExtra(action);
+  }
+  if (confirm_) {
+    context.push(confirm(confirm_->question, confirm_->detail, confirm_->verb, pressed_));
+    return true;
   }
   pressed_();
   return true;
@@ -488,7 +492,11 @@ void Choice::paintTrailing(Painter &painter, const Rect &area) const {
 // Slider
 
 float Slider::trailingWidth(LayoutContext &context, float width) {
-  return std::min(context.theme.px(trackWidthDp + numberWidthDp), width * trailingShare);
+  // The title keeps the room it needs; the track takes the rest, up to its full length.
+  const Theme &theme = context.theme;
+  const float title = context.text.measure(text().title, theme.px(theme.type.body));
+  const float room = std::max(width * trailingShare, width - title - theme.px(theme.spacing.pad));
+  return std::min(theme.px(trackWidthDp + numberWidthDp), room);
 }
 
 Rect Slider::track(const Theme &theme) const noexcept {
@@ -558,6 +566,24 @@ void Slider::paintTrailing(Painter &painter, const Rect &area) const {
   painter.labelEndingAt(std::to_string(level_) + unit_,
                         Point{area.right(), area.y + area.height * 0.5f}, theme.type.value,
                         theme.colours.ink);
+}
+
+// Progress
+
+Size Progress::measure(LayoutContext &context, float maxWidth) {
+  return Size{maxWidth, context.theme.px(fixedHeight().value_or(trackHeightDp))};
+}
+
+void Progress::paint(Painter &painter) const {
+  const Theme &theme = painter.theme;
+  const float radius = frame_.height * 0.5f;
+  painter.canvas.fillRoundRect(frame_, radius, painter.fade(theme.colours.track));
+  const float filled = std::clamp(fraction_, 0.0f, 1.0f);
+  if (filled > 0.0f) {
+    painter.canvas.fillRoundRect(
+        Rect{frame_.x, frame_.y, std::max(frame_.height, frame_.width * filled), frame_.height},
+        radius, painter.fade(theme.colours.accent));
+  }
 }
 
 // Tabs
