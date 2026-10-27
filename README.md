@@ -4,8 +4,9 @@ A small C++20 2D drawing library on the SDL3 GPU API (Vulkan), and a GPU-free im
 
 - `gpu2d::render`: an X11 window and Vulkan device, and a canvas that draws antialiased SDF
   shapes (rounded rectangles filled or stroked, circles, rings and arcs, lines), triangles,
-  textured quads with tint, text through SDL3_ttf's GPU text engine and a backdrop blur, with
-  transform and scissor stacks, blend modes and offscreen render targets that read back to RGBA.
+  textured quads with tint, text (shaped by HarfBuzz, each character at its fractional pen, drawn
+  from SDL3_ttf's GPU glyph atlas) and a backdrop blur, with transform and scissor stacks, blend
+  modes and offscreen render targets that read back to RGBA.
   Draws are batched into few GPU passes.
 - `gpu2d::ui`: a widget toolkit on that canvas for menus and settings screens: theme tokens,
   layout, standard widgets (rows, switches, choices, sliders, tabs, lists, dialogs, hint bar,
@@ -18,10 +19,10 @@ It never logs: failures come back as `gpu2d::GpuError` or as error strings.
 ## Requirements
 
 CMake 3.20+, a C++20 compiler (Clang is the verification toolchain), Ninja, `glslc`, and
-pkg-config modules `sdl3` (3.2+), `sdl3-ttf`, `sdl3-image`, `libpng`, plus Xlib. Tests also need
-`libwebp` and a Vulkan driver (lavapipe works).
+pkg-config modules `sdl3` (3.2+), `sdl3-ttf`, `harfbuzz` (2.8.2+), `sdl3-image`, `libpng`, plus
+Xlib. Tests also need `libwebp` and a Vulkan driver (lavapipe works).
 
-Fedora: `sudo dnf install clang ninja-build cmake glslc SDL3-devel SDL3_ttf-devel SDL3_image-devel libpng-devel libX11-devel libwebp-devel mesa-vulkan-drivers`
+Fedora: `sudo dnf install clang ninja-build cmake glslc SDL3-devel SDL3_ttf-devel harfbuzz-devel SDL3_image-devel libpng-devel libX11-devel libwebp-devel mesa-vulkan-drivers`
 
 ## Use
 

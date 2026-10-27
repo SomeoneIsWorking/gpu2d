@@ -1,10 +1,12 @@
 // Text through SDL3_ttf's GPU engine and the canvas: a face measures, draws its coverage where
-// the line box says, and letter spacing widens a label by one spacing per character.
+// the line box says, letter spacing widens a label by one spacing per character, and characters
+// stand at their exact (fractional) pens, so a narrow space keeps its width.
 #include "gpu2d/text.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
+#include <vector>
 
 #include "gpu_fixture.hpp"
 
@@ -120,6 +122,50 @@ void inkMatchesWhatIsDrawn(GpuFixture &gpu, Text &text) {
   near(static_cast<float>(bottom), baseline - ink.bottom, "and its bottom", 1.5);
 }
 
+void spacesKeepTheirWidth(Text &text) {
+  // Cal Sans's space is 164 of 1000 units.
+  const TextStyle small{.size = 10.0f, .tracking = 0.0f};
+  near(text.measure(" ", small), 1.64f, "a space advances its exact width", 0.02);
+  near(text.measure("l l", small), 2.0f * text.measure("l", small) + text.measure(" ", small),
+       "a label advances the sum of its characters", 0.01);
+}
+
+void glyphsStandAtTheirPens(GpuFixture &gpu, Text &text) {
+  // "l " advances 4.548 px at 12 px: whole-pixel glyphs would step 4 or 5.
+  const TextStyle style{.size = 12.0f, .tracking = 0.0f};
+  const float step = text.measure("l ", style);
+  near(step, 4.548f, "an l and a space advance their exact widths", 0.02);
+  const auto frame = gpu.draw([&](Canvas &canvas) {
+    expect(text.draw(canvas, "l l l l l", Point{4.0f, 4.0f}, style, Colour{255, 255, 255, 255}),
+           "the label shapes");
+  });
+  text.retire();
+  // Each stem's ink-weighted centre, from the columns between its pen and the next stem's.
+  std::vector<float> centres;
+  for (int stem = 0; stem < 5; ++stem) {
+    const float from = 4.0f + static_cast<float>(stem) * step - 1.0f;
+    float weight = 0.0f;
+    float moment = 0.0f;
+    for (int x = 0; x < 64; ++x) {
+      const float centre = static_cast<float>(x) + 0.5f;
+      if (centre < from || centre >= from + step) {
+        continue;
+      }
+      for (int y = 0; y < 64; ++y) {
+        weight += static_cast<float>(at(frame, x, y).a);
+        moment += static_cast<float>(at(frame, x, y).a) * centre;
+      }
+    }
+    if (weight > 0.0f) {
+      centres.push_back(moment / weight);
+    }
+  }
+  expect(centres.size() == 5, "five stems are drawn");
+  for (std::size_t i = 1; i < centres.size(); ++i) {
+    near(centres[i] - centres[i - 1], step, "each stem stands one exact step from the last", 0.25);
+  }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -134,6 +180,8 @@ int main(int argc, char **argv) {
   draws(gpu, text);
   spacingMovesGlyphs(gpu, text);
   inkMatchesWhatIsDrawn(gpu, text);
+  spacesKeepTheirWidth(text);
+  glyphsStandAtTheirPens(gpu, text);
   std::printf("text: all checks passed\n");
   return 0;
 }
