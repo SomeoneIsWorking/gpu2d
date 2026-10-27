@@ -1,6 +1,8 @@
 // navigator — the one stack of screens. Input, the pointer, drawing, prompts and typed text all go
 // to it and walk it from the top: only the top screen takes input; drawing starts at the highest
 // screen that covers the viewport and goes up. Back pops unless a widget or the screen takes it.
+// Typed text goes to the focused widget, then the screen; A on a text field asks the app's
+// on-screen keyboard, which types back through `text` and `act`.
 // Pushes and pops fade and slide on the toolkit's clock, which the app sets each frame; the
 // focus ring eases between widgets and scroll views ease the focus into view.
 #pragma once
@@ -49,6 +51,10 @@ public:
   void setSounds(Sounds sounds) {
     sounds_ = std::move(sounds);
   }
+  /// What A on a text field asks: the app opens its on-screen keyboard over the field.
+  void setKeyboard(std::function<void()> open) {
+    keyboard_ = std::move(open);
+  }
   /// The clock, in seconds; set before laying out each frame.
   void setTime(double now) noexcept {
     now_ = now;
@@ -82,8 +88,9 @@ public:
   /// The open screens, bottom first.
   [[nodiscard]] std::vector<const Screen *> screens() const;
 
-  /// Builds and lays out the screens drawn in `viewport`.
-  void layout(const Rect &viewport);
+  /// Builds and lays out the screens drawn in `viewport`; overlays stand above the bottom
+  /// `covered` pixels, which a docked keyboard takes.
+  void layout(const Rect &viewport, float covered = 0.0f);
   /// Draws them; after `layout`.
   void paint(Canvas &canvas);
   /// Draws the screens up to the highest one that is not an overlay, for an app that draws its
@@ -94,7 +101,10 @@ public:
   /// An action for the top screen; true when something took it.
   bool act(Action action);
   bool pointer(const PointerEvent &event);
+  /// Typed text for the focused widget, else the top screen; true when something took it.
   bool text(std::string_view typed);
+  /// Whether the top screen's focused widget takes typed text, as last laid out.
+  [[nodiscard]] bool typing() const;
   /// The top screen's prompts: the focused widget's, then the screen's.
   [[nodiscard]] std::vector<Hint> hints();
 
@@ -154,9 +164,11 @@ private:
   Typesetter &text_;
   Prompts &prompts_;
   Sounds sounds_;
+  std::function<void()> keyboard_;
   Theme theme_;
   double now_{};
   Rect viewport_;
+  float covered_{};
   std::vector<Entry> stack_;
   /// Popped screens fading out, drawn over the stack.
   std::vector<Entry> leaving_;

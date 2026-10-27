@@ -2,7 +2,9 @@
 // drawn. Layout, focus and the stack need no GPU.
 #pragma once
 
+#include <algorithm>
 #include <string_view>
+#include <vector>
 
 #include "gpu2d/ui/navigator.hpp"
 #include "gpu2d/ui/typesetter.hpp"
@@ -30,6 +32,12 @@ public:
   void draw(Canvas & /*canvas*/, ui::Action /*action*/, const Rect & /*box*/,
             Colour /*ink*/) override {
   }
+  [[nodiscard]] bool bound(ui::Action action, bool typing) override {
+    return !typing || std::ranges::find(unboundWhileTyping, action) == unboundWhileTyping.end();
+  }
+
+  /// The actions a device has no control for while a field is typed into, as a keyboard's.
+  std::vector<ui::Action> unboundWhileTyping;
 };
 
 /// A navigator over the fakes at 1 px per dp in a 1280 x 800 viewport, counting its sounds.

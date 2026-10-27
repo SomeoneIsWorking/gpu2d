@@ -103,6 +103,8 @@ public:
     std::string label;
     std::function<void()> chosen;
     ButtonKind kind{ButtonKind::Normal};
+    /// The way out: Back does what this button does.
+    bool exits{false};
   };
 
   Dialog(std::string title, std::string body, std::vector<Choice> choices, std::size_t focused = 0)
@@ -110,12 +112,17 @@ public:
         focused_{focused} {
   }
 
+  /// The paragraph under the title.
+  [[nodiscard]] const std::string &body() const noexcept {
+    return body_;
+  }
   [[nodiscard]] std::unique_ptr<Widget> build(const Theme &theme) override;
   [[nodiscard]] Rect area(const Rect &viewport, const Theme &theme) const override;
   [[nodiscard]] bool overlay() const override {
     return true;
   }
   void paintBackdrop(Painter &painter, const Rect &viewport) const override;
+  [[nodiscard]] BackReply back(ActContext &context) override;
   [[nodiscard]] std::vector<Hint> hints() const override;
   [[nodiscard]] std::string initialFocus() const override;
 

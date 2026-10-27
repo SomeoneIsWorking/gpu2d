@@ -260,6 +260,28 @@ void dialogsConfirmAndCallbacksPushSafely() {
   rig.frame();
   rig.navigator.act(Action::Back);
   expect(removed == 1 && rig.navigator.top() == &pages, "Back cancels a confirmation");
+
+  int declined = 0;
+  rig.navigator.push(std::make_unique<ui::Dialog>(
+      "Accept the licence?", "",
+      std::vector<ui::Dialog::Choice>{ui::Dialog::Choice{"Accept",
+                                                         [&] {
+                                                           ++removed;
+                                                         }},
+                                      ui::Dialog::Choice{"Decline",
+                                                         [&] {
+                                                           ++declined;
+                                                         },
+                                                         ui::ButtonKind::Normal, true}}));
+  rig.frame();
+  const auto *licence = dynamic_cast<const ui::Dialog *>(rig.navigator.top());
+  expect(licence != nullptr && licence->title() == "Accept the licence?" && licence->body().empty(),
+         "a dialog says its title and body");
+  const std::vector<ui::Hint> hints = rig.navigator.hints();
+  expect(!hints.empty() && hints.back().label == "Decline", "Back is named for the way out");
+  rig.navigator.act(Action::Back);
+  expect(declined == 1 && removed == 1 && rig.navigator.top() == &pages,
+         "Back does what the way out does and closes the dialog");
 }
 
 void closeFromTakesTheScreensAbove() {
@@ -337,6 +359,21 @@ void anOverlayNamesItsPromptsOnTheBarBelow() {
          "the bar under a dialog names what the dialog's focus does");
 }
 
+void overlaysStandAboveACoveredStrip() {
+  test::Rig rig;
+  auto owned = std::make_unique<Pages>();
+  Pages &pages = *owned;
+  rig.navigator.push(std::move(owned));
+  rig.navigator.push(ui::confirm("Remove it?", "", "Remove", [] {
+  }));
+  rig.navigator.layout(rig.viewport, 300.0f);
+  const ui::Widget *button = rig.navigator.find("dialog/1");
+  expect(button != nullptr && button->frame().y + button->frame().height <= 500.0f,
+         "the dialog stands above the covered strip");
+  expect(pages.bar->frame().y + pages.bar->frame().height > 700.0f,
+         "the page under it keeps the whole viewport");
+}
+
 void focusAskedWhileHandlingInputWaits() {
   test::Rig rig;
   auto owned = std::make_unique<Pages>();
@@ -380,6 +417,7 @@ int main() {
   ringFollowsTheFocus();
   downPastTheLastFocusableScrolls();
   anOverlayNamesItsPromptsOnTheBarBelow();
+  overlaysStandAboveACoveredStrip();
   focusAskedWhileHandlingInputWaits();
   std::printf("ui navigator: all checks passed\n");
   return 0;

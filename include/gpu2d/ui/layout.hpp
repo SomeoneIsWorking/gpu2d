@@ -115,7 +115,8 @@ public:
   void paint(Painter &painter) const override;
 };
 
-/// One child at the size it measures (no wider than `maxWidthDp`), centred in its frame.
+/// One child at the size it measures (no wider than `maxWidthDp`), centred in its frame; a child
+/// that grows takes the frame's whole height.
 class Centre : public Container {
 public:
   explicit Centre(float maxWidthDp) : maxWidth_{maxWidthDp} {

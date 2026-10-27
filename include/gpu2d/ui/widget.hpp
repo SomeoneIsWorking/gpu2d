@@ -103,6 +103,8 @@ public:
   virtual void perform(Action action) = 0;
   /// Moves the focus to the widget `id` once the input is handled.
   virtual void focus(std::string id) = 0;
+  /// Asks the app's on-screen keyboard to type into the focused field (`Navigator::setKeyboard`).
+  virtual void openKeyboard() = 0;
   [[nodiscard]] virtual double now() const = 0;
   [[nodiscard]] virtual const Theme &theme() const = 0;
 };
@@ -211,6 +213,14 @@ public:
   virtual bool act(Action action, ActContext &context);
   /// A pointer press at `at`, inside its frame, after it took the focus. Presses it by default.
   virtual bool press(Point at, ActContext &context);
+  /// Whether typed text goes to it while it is focused.
+  [[nodiscard]] virtual bool takesText() const {
+    return false;
+  }
+  /// Typed text while focused; true when taken.
+  virtual bool type(std::string_view /*typed*/, ActContext & /*context*/) {
+    return false;
+  }
   /// What its actions are called, for the hint bar.
   [[nodiscard]] virtual std::vector<Hint> hints() const {
     return {};

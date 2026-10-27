@@ -19,8 +19,13 @@ namespace gpu2d::ui {
 [[nodiscard]] std::string fitted(Typesetter &typesetter, std::string_view text, float room,
                                  float size);
 
-/// `text` in lines no wider than `room` at `size`, broken at spaces; a word wider than `room` is
-/// fitted on a line of its own.
+/// `text` when it fits `room` pixels at `size`, else "…" and the longest end of it that fits, as a
+/// field shows the end being typed.
+[[nodiscard]] std::string fittedEnd(Typesetter &typesetter, std::string_view text, float room,
+                                    float size);
+
+/// `text` in lines no wider than `room` at `size`, broken at spaces and at each line break; a word
+/// wider than `room` is fitted on a line of its own, and an empty line between breaks is kept.
 [[nodiscard]] std::vector<std::string> wrapped(Typesetter &typesetter, std::string_view text,
                                                float room, float size);
 

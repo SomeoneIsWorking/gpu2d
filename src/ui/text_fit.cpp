@@ -54,30 +54,67 @@ std::string fitted(Typesetter &typesetter, std::string_view text, float room, fl
   return kept + std::string{ellipsis};
 }
 
+std::string fittedEnd(Typesetter &typesetter, std::string_view text, float room, float size) {
+  if (typesetter.measure(text, size) <= room) {
+    return std::string{text};
+  }
+  // The longest end, from a character boundary, that fits after the ellipsis.
+  std::vector<std::size_t> cuts;
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    if (!continuation(text[i])) {
+      cuts.push_back(i);
+    }
+  }
+  const auto fits = [&](std::size_t cut) {
+    std::string candidate{ellipsis};
+    candidate += text.substr(cut);
+    return typesetter.measure(candidate, size) <= room;
+  };
+  std::size_t low = 0;
+  std::size_t high = cuts.empty() ? 0 : cuts.size() - 1;
+  while (low < high) {
+    const std::size_t middle = (low + high) / 2;
+    if (fits(cuts[middle])) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  return std::string{ellipsis} + std::string{text.substr(cuts.empty() ? text.size() : cuts[low])};
+}
+
 std::vector<std::string> wrapped(Typesetter &typesetter, std::string_view text, float room,
                                  float size) {
   std::vector<std::string> lines;
-  std::string line;
-  std::size_t at = 0;
-  while (at <= text.size()) {
-    std::size_t end = text.find(' ', at);
-    end = end == std::string_view::npos ? text.size() : end;
-    const std::string_view word = text.substr(at, end - at);
-    std::string joined = line;
-    if (!joined.empty() && !word.empty()) {
-      joined += ' ';
+  std::size_t from = 0;
+  while (from <= text.size()) {
+    std::size_t stop = text.find('\n', from);
+    stop = stop == std::string_view::npos ? text.size() : stop;
+    const std::string_view paragraph = text.substr(from, stop - from);
+    const std::size_t before = lines.size();
+    std::string line;
+    std::size_t at = 0;
+    while (at <= paragraph.size()) {
+      std::size_t end = paragraph.find(' ', at);
+      end = end == std::string_view::npos ? paragraph.size() : end;
+      const std::string_view word = paragraph.substr(at, end - at);
+      std::string joined = line;
+      if (!joined.empty() && !word.empty()) {
+        joined += ' ';
+      }
+      joined += word;
+      if (!line.empty() && typesetter.measure(joined, size) > room) {
+        lines.push_back(line);
+        line = std::string{word};
+      } else {
+        line = std::move(joined);
+      }
+      at = end + 1;
     }
-    joined += word;
-    if (!line.empty() && typesetter.measure(joined, size) > room) {
+    if (!line.empty() || (lines.size() == before && stop < text.size())) {
       lines.push_back(line);
-      line = std::string{word};
-    } else {
-      line = std::move(joined);
     }
-    at = end + 1;
-  }
-  if (!line.empty()) {
-    lines.push_back(line);
+    from = stop + 1;
   }
   for (std::string &kept : lines) {
     kept = fitted(typesetter, kept, room, size);

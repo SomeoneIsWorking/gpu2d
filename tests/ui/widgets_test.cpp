@@ -109,6 +109,61 @@ public:
   std::size_t chosen{0};
 };
 
+/// Three pictures in a grid of cards, the second chosen now.
+class Pictures final : public ui::Screen {
+public:
+  Pictures() : Screen{"pictures", "Pictures"} {
+  }
+  [[nodiscard]] std::unique_ptr<ui::Widget> build(const ui::Theme & /*theme*/) override {
+    auto root = std::make_unique<ui::Column>();
+    auto &grid = root->add<ui::Grid>("grid", 3);
+    for (std::size_t i = 0; i < 3; ++i) {
+      grid.add<ui::CardButton>(
+              "picture/" + std::to_string(i),
+              [this, i] {
+                picked = i;
+              },
+              "Choose")
+          .mark(i == 1)
+          .add<ui::Label>("Picture " + std::to_string(i), ui::TextRole::Caption);
+    }
+    return root;
+  }
+  std::size_t picked{9};
+};
+
+/// A name and a password typed in, kept here as an app's model would keep them.
+class Form final : public ui::Screen {
+public:
+  Form() : Screen{"form", "Form"} {
+  }
+  [[nodiscard]] std::unique_ptr<ui::Widget> build(const ui::Theme & /*theme*/) override {
+    auto root = std::make_unique<ui::Column>();
+    root->add<ui::TextField>("name", "Name", name,
+                             [this](std::string text) {
+                               name = std::move(text);
+                             })
+        .placeholder("Your name")
+        .limit(8)
+        .onSubmit(
+            [this] {
+              ++submitted;
+            },
+            "Save");
+    root->add<ui::TextField>("password", "Password", password,
+                             [this](std::string text) {
+                               password = std::move(text);
+                             })
+        .mask();
+    root->add<ui::Button>("ok", "OK", [] {
+    });
+    return root;
+  }
+  std::string name;
+  std::string password;
+  int submitted{0};
+};
+
 struct Fixture {
   test::Rig rig;
   Board *board{};
@@ -283,6 +338,94 @@ void wideTabStripScrolls() {
          "the chosen tab scrolls whole into view");
 }
 
+void cardButtonsChooseInAGrid() {
+  test::Rig rig;
+  auto owned = std::make_unique<Pictures>();
+  Pictures *pictures = owned.get();
+  rig.navigator.push(std::move(owned));
+  rig.frame();
+  expect(rig.navigator.focused() == "picture/0", "the first card takes the focus");
+  rig.navigator.act(Action::Right);
+  expect(rig.navigator.focused() == "picture/1", "Right moves to the next card");
+  const std::vector<ui::Hint> hints = rig.navigator.hints();
+  expect(!hints.empty() && hints.front().label == "Choose" &&
+             hints.front().keys == std::vector<Action>{Action::Accept},
+         "a card prompts its verb on A");
+  const auto *card = dynamic_cast<const ui::CardButton *>(rig.navigator.find("picture/1"));
+  expect(card != nullptr && card->marked(), "the card chosen now is marked");
+  rig.navigator.act(Action::Accept);
+  expect(pictures->picked == 1, "A presses the focused card");
+  const Rect third = rig.navigator.find("picture/2")->frame();
+  rig.navigator.pointer(ui::PointerEvent{
+      ui::PointerKind::Press, Point{third.x + third.width * 0.5f, third.y + 2.0f}, 0.0f});
+  expect(pictures->picked == 2 && rig.navigator.focused() == "picture/2",
+         "a press on a card focuses and presses it");
+}
+
+void textFieldsTakeTypedText() {
+  test::Rig rig;
+  int keyboards = 0;
+  rig.navigator.setKeyboard([&keyboards] {
+    ++keyboards;
+  });
+  auto owned = std::make_unique<Form>();
+  Form *form = owned.get();
+  rig.navigator.push(std::move(owned));
+  rig.frame();
+  expect(rig.navigator.focused() == "name" && rig.navigator.typing(),
+         "a focused field takes typed text");
+  const auto *empty = dynamic_cast<const ui::TextField *>(rig.navigator.find("name"));
+  expect(empty != nullptr && empty->text().empty(), "the field starts empty");
+  expect(rig.navigator.text("Ada") && form->name == "Ada", "typed text goes in at the end");
+  rig.navigator.text(" L\xC3\xA9");
+  expect(form->name == "Ada L\xC3\xA9", "UTF-8 goes in whole");
+  rig.navigator.act(Action::Erase);
+  expect(form->name == "Ada L", "Erase takes off the last character, all its bytes");
+  rig.navigator.text("ovelace");
+  expect(form->name == "Ada L", "text past the limit is refused whole");
+  rig.navigator.act(Action::Submit);
+  expect(form->submitted == 1, "Submit does the field's own step");
+  const std::vector<ui::Hint> hints = rig.navigator.hints();
+  expect(hints.size() >= 2 && hints[0].keys == std::vector<Action>{Action::Accept} &&
+             hints[1].label == "Save",
+         "the field prompts typing and its Submit verb");
+  expect(std::ranges::any_of(hints,
+                             [](const ui::Hint &hint) {
+                               return hint.keys == std::vector<Action>{Action::Tertiary} &&
+                                      hint.label == "Clear";
+                             }),
+         "a field holding text prompts Clear");
+  rig.prompts.unboundWhileTyping = {Action::Accept, Action::Tertiary};
+  const std::vector<ui::Hint> keyed = rig.navigator.hints();
+  expect(!keyed.empty() && keyed[0].label == "Save" &&
+             std::ranges::none_of(keyed,
+                                  [](const ui::Hint &hint) {
+                                    return hint.keys.front() == Action::Accept ||
+                                           hint.keys.front() == Action::Tertiary;
+                                  }),
+         "a hint the device has no control for is not shown");
+  rig.prompts.unboundWhileTyping.clear();
+  rig.navigator.act(Action::Accept);
+  expect(keyboards == 1, "A asks the app's keyboard");
+  expect(rig.navigator.act(Action::Tertiary) && form->name.empty(), "Y clears the field");
+  expect(std::ranges::none_of(rig.navigator.hints(),
+                              [](const ui::Hint &hint) {
+                                return hint.label == "Clear";
+                              }),
+         "an empty field does not prompt Clear");
+  expect(!rig.navigator.act(Action::Tertiary), "Y on an empty field falls through");
+
+  rig.navigator.act(Action::Down);
+  rig.navigator.text("s3cret");
+  const auto *secret = dynamic_cast<const ui::TextField *>(rig.navigator.find("password"));
+  expect(form->password == "s3cret" && secret != nullptr && secret->masked(),
+         "a masked field takes text like any other");
+  expect(!rig.navigator.act(Action::Submit), "Submit with no step of the field's falls through");
+  rig.navigator.act(Action::Down);
+  expect(!rig.navigator.typing() && !rig.navigator.text("x") && form->password == "s3cret",
+         "nothing takes text off a field");
+}
+
 void toastComesAndGoes() {
   ui::Toast toast;
   toast.show("Saved", false, 10.0, 3.0);
@@ -302,6 +445,8 @@ int main() {
   rowActionsAndChip();
   confirmFirstAsks();
   wideTabStripScrolls();
+  cardButtonsChooseInAGrid();
+  textFieldsTakeTypedText();
   toastComesAndGoes();
   std::printf("ui widgets: all checks passed\n");
   return 0;

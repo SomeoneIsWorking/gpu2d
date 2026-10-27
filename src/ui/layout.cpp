@@ -247,7 +247,9 @@ void Centre::arrange(LayoutContext &context, const Rect &frame) {
   const Rect area = inner(theme, frame);
   const float width = std::min(area.width, theme.px(maxWidth_));
   for (const std::unique_ptr<Widget> &child : children_) {
-    const float height = std::min(area.height, heightOf(context, *child, width));
+    const float height = child->growth() > 0.0f
+                             ? area.height
+                             : std::min(area.height, heightOf(context, *child, width));
     child->arrange(context, Rect{area.x + (area.width - width) * 0.5f,
                                  area.y + (area.height - height) * 0.5f, width, height});
   }

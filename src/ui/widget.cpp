@@ -13,9 +13,7 @@ void Painter::label(std::string_view words, Point start, float sizeDp, Colour co
   if (words.empty()) {
     return;
   }
-  const float size = px(sizeDp);
-  text.draw(canvas, words, Point{start.x, start.y - text.lineHeight(size) * 0.5f}, size,
-            fade(colour));
+  text.drawCentred(canvas, words, start, px(sizeDp), fade(colour));
 }
 
 float Painter::labelEndingAt(std::string_view words, Point end, float sizeDp, Colour colour) const {
