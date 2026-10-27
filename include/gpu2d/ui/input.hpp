@@ -1,5 +1,5 @@
-// input — what the toolkit is driven with: navigation actions and pointer events. The app maps its
-// own pads, keys and mouse onto these, so nothing here knows a device.
+// input — what the toolkit is driven with: navigation actions, typed text and pointer events. The
+// app maps its own pads, keys and mouse onto these, so nothing here knows a device.
 #pragma once
 
 #include <cstdint>
@@ -27,6 +27,10 @@ enum class Action : std::uint8_t {
   NextTab,
   /// The app's menu button.
   Menu,
+  /// Removes the character before the caret of the field being typed in (Backspace).
+  Erase,
+  /// Done with the line being typed (Enter, or an on-screen keyboard's Done).
+  Submit,
 };
 
 enum class PointerKind : std::uint8_t {

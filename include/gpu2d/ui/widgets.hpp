@@ -1,9 +1,12 @@
 // widgets — the standard widgets, each with one behaviour wherever it is used:
 // - Label and SectionHeading: words; nothing to press.
 // - Button: A presses it.
+// - CardButton: a card holding a picture and its caption; A presses it, a marked one is ticked.
 // - Item (a settings row: title, subtitle, value, an optional chip naming where the value comes
 //   from): A presses it when it does something; one with nothing to do is not focusable. X and Y
 //   do the row's second and third actions when it has them, on every kind of row.
+// - TextField: typed text goes in at the end, Erase takes the last character off, Y clears it and
+//   Submit is done; A asks the app's on-screen keyboard to type into it.
 // - Toggle: A flips it.
 // - Choice: Left and Right step through its options; A opens them as a list.
 // - Slider: Left and Right step it; a press on the track sets it.
@@ -14,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <string_view>
 #include <optional>
 #include <string>
 #include <utility>
@@ -84,6 +88,81 @@ private:
   std::string label_;
   std::function<void()> pressed_;
   ButtonKind kind_;
+};
+
+/// A labelled line of text being typed: what is typed, or a placeholder while it is empty, with a
+/// caret at its end while focused; a masked field shows a dot per character. It edits the app's
+/// text through `changed`, so it holds a copy only while built; a masked copy is wiped.
+class TextField : public Widget {
+public:
+  TextField(std::string id, std::string label, std::string text,
+            std::function<void(std::string)> changed)
+      : Widget{std::move(id)}, label_{std::move(label)}, text_{std::move(text)},
+        changed_{std::move(changed)} {
+  }
+  ~TextField() override;
+  TextField(const TextField &) = delete;
+  TextField &operator=(const TextField &) = delete;
+  TextField(TextField &&) = delete;
+  TextField &operator=(TextField &&) = delete;
+
+  /// What the empty field says.
+  TextField &placeholder(std::string words) {
+    placeholder_ = std::move(words);
+    return *this;
+  }
+  /// Shows a dot per character, for a password.
+  TextField &mask(bool masked = true) noexcept {
+    masked_ = masked;
+    return *this;
+  }
+  /// The most bytes it holds; typing that would pass it is refused whole.
+  TextField &limit(std::size_t bytes) noexcept {
+    limit_ = bytes;
+    return *this;
+  }
+  /// What Submit does, and the hint's word for it.
+  TextField &onSubmit(std::function<void()> submitted, std::string verb = "Done") {
+    submitted_ = std::move(submitted);
+    verb_ = std::move(verb);
+    return *this;
+  }
+
+  [[nodiscard]] const std::string &text() const noexcept {
+    return text_;
+  }
+  [[nodiscard]] bool masked() const noexcept {
+    return masked_;
+  }
+
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void arrange(LayoutContext &context, const Rect &frame) override;
+  [[nodiscard]] bool focusable() const override {
+    return true;
+  }
+  [[nodiscard]] bool takesText() const override {
+    return true;
+  }
+  [[nodiscard]] float cornerRadius(const Theme &theme) const override;
+  bool act(Action action, ActContext &context) override;
+  bool type(std::string_view typed, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  void paint(Painter &painter) const override;
+
+private:
+  /// The line as drawn: the text, or a dot per character when masked.
+  [[nodiscard]] std::string drawn() const;
+
+  std::string label_;
+  std::string text_;
+  std::function<void(std::string)> changed_;
+  std::string placeholder_;
+  bool masked_{false};
+  std::size_t limit_{SIZE_MAX};
+  std::function<void()> submitted_;
+  std::string verb_;
+  std::string labelShown_;
+  std::string lineShown_;
 };
 
 /// A row: title, an optional subtitle, and what stands at its end. A plain item shows a value and,
@@ -359,17 +438,48 @@ private:
   Orientation orientation_;
 };
 
-/// How far something has got: a thin bar filled from the left.
+/// A card A presses: what it holds (a picture and its caption) is one choice, as in a grid of
+/// pictures. Drawn as a row is; a marked one has a tick in its corner, the one chosen now.
+class CardButton : public Card {
+public:
+  /// `verb` is the hint's word for A.
+  CardButton(std::string id, std::function<void()> pressed, std::string verb = "Select")
+      : Card{std::move(id)}, pressed_{std::move(pressed)}, verb_{std::move(verb)} {
+  }
+  CardButton &mark(bool marked = true) noexcept {
+    marked_ = marked;
+    return *this;
+  }
+  [[nodiscard]] bool marked() const noexcept {
+    return marked_;
+  }
+
+  [[nodiscard]] bool focusable() const override {
+    return true;
+  }
+  [[nodiscard]] float cornerRadius(const Theme &theme) const override;
+  bool act(Action action, ActContext &context) override;
+  [[nodiscard]] std::vector<Hint> hints() const override;
+  void paint(Painter &painter) const override;
+
+private:
+  std::function<void()> pressed_;
+  std::string verb_;
+  bool marked_{false};
+};
+
+/// How far something has got: a thin bar filled from the left, or with no measure, a stretch of
+/// it sweeping across while the work goes on.
 class Progress : public Widget {
 public:
-  /// `fraction` is 0 to 1.
-  explicit Progress(float fraction) noexcept : fraction_{fraction} {
+  /// `fraction` is 0 to 1; nothing when the work has no measure.
+  explicit Progress(std::optional<float> fraction) noexcept : fraction_{fraction} {
   }
   [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
   void paint(Painter &painter) const override;
 
 private:
-  float fraction_;
+  std::optional<float> fraction_;
 };
 
 /// A scrolled column of rows.

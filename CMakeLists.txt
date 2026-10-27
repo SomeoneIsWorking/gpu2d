@@ -78,6 +78,7 @@ add_library(gpu2d_ui STATIC
   src/ui/theme.cpp
   src/ui/motion.cpp
   src/ui/text_fit.cpp
+  src/ui/typesetter.cpp
   src/ui/focus.cpp
   src/ui/widget.cpp
   src/ui/layout.cpp

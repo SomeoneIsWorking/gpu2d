@@ -67,6 +67,9 @@ void fittingKeepsCharactersWhole() {
   const std::vector<std::string> lines = ui::wrapped(text, "one two three four", 50.0f, 10.0f);
   expect(lines.size() == 2 && lines[0] == "one two" && lines[1] == "three four",
          "wrapping breaks at spaces within the room");
+  const std::vector<std::string> paragraphs = ui::wrapped(text, "one two\n\nthree", 50.0f, 10.0f);
+  expect(paragraphs == std::vector<std::string>{"one two", "", "three"},
+         "a line break starts a line, and an empty line between paragraphs is kept");
 }
 
 void columnStacksAndSharesSpareRoom() {
@@ -120,6 +123,13 @@ void gridAndCentre() {
   centre.arrange(layout.context, Rect{0.0f, 0.0f, 1000.0f, 500.0f});
   near(child.frame().x, 350.0f, "centred across, at its widest");
   near(child.frame().y, 200.0f, "centred down");
+
+  ui::Centre tall{300.0f};
+  ui::Widget &filling = tall.add<ui::Spacer>();
+  tall.pad(ui::Insets::all(10.0f));
+  tall.arrange(layout.context, Rect{0.0f, 0.0f, 1000.0f, 500.0f});
+  near(filling.frame().y, 10.0f, "a growing child starts at the top");
+  near(filling.frame().height, 480.0f, "and takes the whole height");
 }
 
 void scrollViewClampsItsOffset() {

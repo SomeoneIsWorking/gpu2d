@@ -63,8 +63,17 @@ void Dialog::paintBackdrop(Painter &painter, const Rect &viewport) const {
   paintScrim(painter, viewport);
 }
 
+Screen::BackReply Dialog::back(ActContext & /*context*/) {
+  const auto out = std::ranges::find_if(choices_, &Choice::exits);
+  if (out != choices_.end() && out->chosen) {
+    out->chosen();
+  }
+  return BackReply::Pop;
+}
+
 std::vector<Hint> Dialog::hints() const {
-  return {Hint{{Action::Back}, "Cancel"}};
+  const auto out = std::ranges::find_if(choices_, &Choice::exits);
+  return {Hint{{Action::Back}, out != choices_.end() ? out->label : "Cancel"}};
 }
 
 std::string Dialog::initialFocus() const {
@@ -74,7 +83,7 @@ std::string Dialog::initialFocus() const {
 std::unique_ptr<Dialog> confirm(std::string title, std::string body, std::string action,
                                 std::function<void()> confirmed) {
   std::vector<Dialog::Choice> choices{
-      Dialog::Choice{"Cancel", {}, ButtonKind::Normal},
+      Dialog::Choice{"Cancel", {}, ButtonKind::Normal, true},
       Dialog::Choice{std::move(action), std::move(confirmed), ButtonKind::Danger}};
   return std::make_unique<Dialog>(std::move(title), std::move(body), std::move(choices), 1);
 }

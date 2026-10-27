@@ -186,6 +186,11 @@ public:
   void focus(std::string id) override {
     focusTo = std::move(id);
   }
+  void openKeyboard() override {
+    if (navigator_.keyboard_) {
+      navigator_.keyboard_();
+    }
+  }
   [[nodiscard]] double now() const override {
     return navigator_.now_;
   }
@@ -317,7 +322,11 @@ void Navigator::build(Entry &entry) {
   ViewState &view = entry.screen->view();
   LayoutContext context{theme_, text_, view, now_};
   entry.root = entry.screen->build(theme_);
-  entry.area = entry.screen->area(viewport_, theme_);
+  Rect room = viewport_;
+  if (entry.screen->overlay()) {
+    room.height = std::max(room.height - covered_, 0.0f);
+  }
+  entry.area = entry.screen->area(room, theme_);
   entry.root->arrange(context, entry.area);
 
   const std::vector<Focusable> items = focusables(*entry.root, viewport_);
@@ -369,7 +378,8 @@ Navigator::Entry *Navigator::fresh() {
 
 std::vector<Hint> Navigator::hintsOf(const Entry &entry) const {
   std::vector<Hint> shown;
-  if (const Widget *focused = findIn(*entry.root, entry.screen->view().focused)) {
+  const Widget *focused = findIn(*entry.root, entry.screen->view().focused);
+  if (focused != nullptr) {
     shown = focused->hints();
   }
   for (Hint &hint : entry.screen->hints()) {
@@ -380,6 +390,12 @@ std::vector<Hint> Navigator::hintsOf(const Entry &entry) const {
       shown.push_back(std::move(hint));
     }
   }
+  const bool typing = focused != nullptr && focused->takesText();
+  std::erase_if(shown, [this, typing](const Hint &hint) {
+    return std::ranges::any_of(hint.keys, [this, typing](Action key) {
+      return !prompts_.bound(key, typing);
+    });
+  });
   return shown;
 }
 
@@ -400,8 +416,9 @@ void Navigator::placeHints() {
   }
 }
 
-void Navigator::layout(const Rect &viewport) {
+void Navigator::layout(const Rect &viewport, float covered) {
   viewport_ = viewport;
+  covered_ = covered;
   std::erase_if(leaving_, [this](const Entry &entry) {
     return !entry.presence.moving(now_);
   });
@@ -812,12 +829,24 @@ bool Navigator::text(std::string_view typed) {
   if (entry == nullptr) {
     return false;
   }
-  Context context{*this, *entry->screen};
+  Screen &screen = *entry->screen;
+  Context context{*this, screen};
   ++busy_;
-  const bool handled = entry->screen->text(typed, context);
+  Widget *focused = findIn(*entry->root, screen.view().focused);
+  const bool handled =
+      (focused != nullptr && focused->type(typed, context)) || screen.text(typed, context);
   --busy_;
   settle(context);
   return handled;
+}
+
+bool Navigator::typing() const {
+  if (stack_.empty() || !stack_.back().root) {
+    return false;
+  }
+  const Entry &entry = stack_.back();
+  const Widget *focused = findIn(*entry.root, entry.screen->view().focused);
+  return focused != nullptr && focused->takesText();
 }
 
 std::vector<Hint> Navigator::hints() {

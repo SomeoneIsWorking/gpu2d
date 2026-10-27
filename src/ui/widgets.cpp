@@ -23,11 +23,17 @@ constexpr float chevronDp = 6.0f;
 constexpr float strokeDp = 2.2f;
 /// The share of a row its end may take.
 constexpr float trailingShare = 0.45f;
+/// An unmeasured bar's moving stretch: its share of the track, and the seconds one sweep takes.
+constexpr float sweepShare = 0.3f;
+constexpr double sweepSeconds = 1.4;
 /// A button's height, in dp.
 constexpr float buttonHeightDp = 52.0f;
 /// A chip's height and its widest, in dp.
 constexpr float chipHeightDp = 26.0f;
 constexpr float chipMaxWidthDp = 220.0f;
+/// A caret's width, in dp, and the seconds it shows and hides in.
+constexpr float caretDp = 2.0f;
+constexpr double caretSeconds = 0.5;
 /// Glyphs in the hint bar against the hint text size.
 constexpr float glyphShare = 1.55f;
 /// A chevron pointing `sign` (1 right, -1 left) with its tip at `tipX`.
@@ -198,6 +204,141 @@ void Button::paint(Painter &painter) const {
   painter.label(shown,
                 Point{frame_.x + (frame_.width - width) * 0.5f, frame_.y + frame_.height * 0.5f},
                 theme.type.body, ink);
+}
+
+// TextField
+
+TextField::~TextField() {
+  if (!masked_) {
+    return;
+  }
+  // A password's copy is wiped before its memory goes back.
+  volatile char *bytes = text_.data();
+  for (std::size_t i = 0; i < text_.size(); ++i) {
+    bytes[i] = '\0';
+  }
+}
+
+std::string TextField::drawn() const {
+  if (!masked_) {
+    return text_;
+  }
+  std::string dots;
+  for (const char byte : text_) {
+    // One dot for each byte that starts a UTF-8 character.
+    if ((static_cast<unsigned char>(byte) & 0xC0U) != 0x80U) {
+      dots += "\xE2\x80\xA2";
+    }
+  }
+  return dots;
+}
+
+Size TextField::measure(LayoutContext &context, float maxWidth) {
+  const Theme &theme = context.theme;
+  return Size{maxWidth, theme.px(fixedHeight().value_or(theme.spacing.rowHeight))};
+}
+
+void TextField::arrange(LayoutContext &context, const Rect &frame) {
+  frame_ = frame;
+  const Theme &theme = context.theme;
+  const float room = std::max(0.0f, frame.width - 2.0f * theme.px(theme.spacing.pad));
+  labelShown_ = fitted(context.text, label_, room, theme.px(theme.type.caption));
+  const float caret = theme.px(caretDp + theme.spacing.gap);
+  lineShown_ = text_.empty() ? fitted(context.text, placeholder_, room, theme.px(theme.type.body))
+                             : fittedEnd(context.text, drawn(), std::max(0.0f, room - caret),
+                                         theme.px(theme.type.body));
+}
+
+float TextField::cornerRadius(const Theme &theme) const {
+  return rowRadius(theme);
+}
+
+bool TextField::act(Action action, ActContext &context) {
+  switch (action) {
+  case Action::Accept:
+    context.openKeyboard();
+    return true;
+  case Action::Erase: {
+    if (text_.empty()) {
+      return true;
+    }
+    std::string next{text_.substr(0, characterStart(text_, text_.size() - 1))};
+    if (changed_) {
+      changed_(std::move(next));
+    }
+    return true;
+  }
+  case Action::Tertiary:
+    if (text_.empty()) {
+      return false;
+    }
+    if (changed_) {
+      changed_({});
+    }
+    return true;
+  case Action::Submit:
+    if (!submitted_) {
+      return false;
+    }
+    submitted_();
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool TextField::type(std::string_view typed, ActContext & /*context*/) {
+  if (typed.empty() || typed.size() > limit_ - std::min(limit_, text_.size())) {
+    return true;
+  }
+  std::string next;
+  next.reserve(text_.size() + typed.size());
+  next += text_;
+  next += typed;
+  if (changed_) {
+    changed_(std::move(next));
+  }
+  return true;
+}
+
+std::vector<Hint> TextField::hints() const {
+  std::vector<Hint> hints{Hint{{Action::Accept}, "Type"}};
+  if (submitted_) {
+    hints.push_back(Hint{{Action::Submit}, verb_});
+  }
+  if (!text_.empty()) {
+    hints.push_back(Hint{{Action::Tertiary}, "Clear"});
+  }
+  return hints;
+}
+
+void TextField::paint(Painter &painter) const {
+  const Theme &theme = painter.theme;
+  const bool focused = painter.focused == id() && !id().empty();
+  painter.canvas.fillRoundRect(
+      frame_, rowRadius(theme),
+      painter.fade(focused ? theme.colours.controlFocused : theme.colours.control));
+  painter.canvas.strokeRoundRect(
+      frame_, rowRadius(theme), painter.px(theme.shape.outline),
+      painter.fade(focused ? theme.colours.accent : theme.colours.track));
+  const float x = frame_.x + painter.px(theme.spacing.pad);
+  const float label = painter.text.lineHeight(painter.px(theme.type.caption));
+  const float line = painter.text.lineHeight(painter.px(theme.type.body));
+  const float gap = painter.px(2.0f);
+  const float top = frame_.y + (frame_.height - (label + gap + line)) * 0.5f;
+  painter.label(labelShown_, Point{x, top + label * 0.5f}, theme.type.caption,
+                theme.colours.inkMuted);
+  const float lineY = top + label + gap + line * 0.5f;
+  painter.label(lineShown_, Point{x, lineY}, theme.type.body,
+                text_.empty() ? theme.colours.inkFaint : theme.colours.ink);
+  const bool shown = std::fmod(painter.now, 2.0 * caretSeconds) < caretSeconds;
+  if (focused && shown) {
+    const float after =
+        text_.empty() ? 0.0f : painter.text.measure(lineShown_, painter.px(theme.type.body));
+    const float caretX = x + after + painter.px(1.0f);
+    painter.canvas.fillRect(Rect{caretX, lineY - line * 0.5f, painter.px(caretDp), line},
+                            painter.fade(theme.colours.accent));
+  }
 }
 
 // Item
@@ -568,6 +709,47 @@ void Slider::paintTrailing(Painter &painter, const Rect &area) const {
                         theme.colours.ink);
 }
 
+// CardButton
+
+float CardButton::cornerRadius(const Theme &theme) const {
+  return rowRadius(theme);
+}
+
+bool CardButton::act(Action action, ActContext & /*context*/) {
+  if (action != Action::Accept || !pressed_) {
+    return false;
+  }
+  pressed_();
+  return true;
+}
+
+std::vector<Hint> CardButton::hints() const {
+  if (!pressed_) {
+    return {};
+  }
+  return {Hint{{Action::Accept}, verb_}};
+}
+
+void CardButton::paint(Painter &painter) const {
+  const Theme &theme = painter.theme;
+  const bool focused = painter.focused == id() && !id().empty();
+  painter.canvas.fillRoundRect(
+      frame_, rowRadius(theme),
+      painter.fade(focused ? theme.colours.controlFocused : theme.colours.control));
+  paintChildren(painter);
+  if (!marked_) {
+    return;
+  }
+  const float badge = painter.px(theme.type.value) * 1.6f;
+  const float inset = painter.px(theme.spacing.gap);
+  const Rect box{frame_.right() - inset - badge, frame_.y + inset, badge, badge};
+  painter.canvas.fillCircle(Point{box.x + badge * 0.5f, box.y + badge * 0.5f}, badge * 0.5f,
+                            painter.fade(theme.colours.accent));
+  const float margin = badge * 0.22f;
+  tick(painter, Rect{box.x + margin, box.y + margin, badge - 2.0f * margin, badge - 2.0f * margin},
+       theme.colours.onAccent);
+}
+
 // Progress
 
 Size Progress::measure(LayoutContext &context, float maxWidth) {
@@ -578,7 +760,19 @@ void Progress::paint(Painter &painter) const {
   const Theme &theme = painter.theme;
   const float radius = frame_.height * 0.5f;
   painter.canvas.fillRoundRect(frame_, radius, painter.fade(theme.colours.track));
-  const float filled = std::clamp(fraction_, 0.0f, 1.0f);
+  if (!fraction_) {
+    const float stretch = frame_.width * sweepShare;
+    const double lap = std::fmod(painter.now, sweepSeconds) / sweepSeconds;
+    const float from = frame_.x - stretch + static_cast<float>(lap) * (frame_.width + stretch);
+    const float left = std::max(from, frame_.x);
+    const float right = std::min(from + stretch, frame_.right());
+    if (right - left > 0.0f) {
+      painter.canvas.fillRoundRect(Rect{left, frame_.y, right - left, frame_.height}, radius,
+                                   painter.fade(theme.colours.accent));
+    }
+    return;
+  }
+  const float filled = std::clamp(*fraction_, 0.0f, 1.0f);
   if (filled > 0.0f) {
     painter.canvas.fillRoundRect(
         Rect{frame_.x, frame_.y, std::max(frame_.height, frame_.width * filled), frame_.height},
