@@ -456,16 +456,22 @@ void Navigator::placeHints() {
   if (stack_.empty() || stack_.back().root == nullptr) {
     return;
   }
-  // A bar shows what the top screen's focus does, though it belongs to a screen under it.
+  // A bar shows what the top screen's focus does, though it belongs to a screen under it; when
+  // the top screen has a bar of its own, the bars under it, dimmed and partly covered, stay empty.
   const std::vector<Hint> shown = hintsOf(stack_.back());
-  std::vector<HintBar *> bars;
+  std::vector<HintBar *> own;
+  findBars(*stack_.back().root, own);
+  std::vector<HintBar *> under;
   for (Entry &entry : stack_) {
-    if (entry.root != nullptr) {
-      findBars(*entry.root, bars);
+    if (entry.root != nullptr && &entry != &stack_.back()) {
+      findBars(*entry.root, under);
     }
   }
-  for (HintBar *bar : bars) {
+  for (HintBar *bar : own) {
     bar->show(shown, theme_, text_, prompts_);
+  }
+  for (HintBar *bar : under) {
+    bar->show(own.empty() ? shown : std::vector<Hint>{}, theme_, text_, prompts_);
   }
 }
 
