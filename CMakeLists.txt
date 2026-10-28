@@ -48,6 +48,7 @@ add_library(gpu2d_render STATIC
   src/render/blur_pipeline.cpp
   src/render/stream_buffer.cpp
   src/render/texture.cpp
+  src/render/image_loader.cpp
   src/render/render_target.cpp
   src/render/canvas.cpp
   src/render/text.cpp
@@ -122,6 +123,12 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     add_test(NAME canvas COMMAND gpu2d_canvas_test)
     add_test(NAME text
       COMMAND gpu2d_text_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/fonts/CalSans-Regular.ttf")
+
+    add_executable(gpu2d_image_loader_test tests/image_loader_test.cpp)
+    target_link_libraries(gpu2d_image_loader_test PRIVATE gpu2d::render X11::X11)
+    target_compile_definitions(gpu2d_image_loader_test PRIVATE GPU2D_TEST_SCRATCH="${scratch}")
+    target_compile_options(gpu2d_image_loader_test PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME image_loader COMMAND gpu2d_image_loader_test)
 
     # The toolkit through its public headers with a fake face: no GPU.
     foreach(name layout navigator widgets cell_grid tab_dock)
