@@ -1,8 +1,9 @@
 # gpu2d
 
-A small C++20 2D drawing library on the SDL3 GPU API (Vulkan), and a GPU-free image target.
+A small C++20 2D drawing library on the SDL3 GPU API (Vulkan, Metal on macOS), and a GPU-free
+image target.
 
-- `gpu2d::render`: an X11 window and Vulkan device, and a canvas that draws antialiased SDF
+- `gpu2d::render`: a window (X11 where windows are X11's) and its GPU device, and a canvas that draws antialiased SDF
   shapes (rounded rectangles filled or stroked, circles, rings and arcs, lines), triangles,
   textured quads with tint, text (shaped by HarfBuzz, each character at its fractional pen, drawn
   from SDL3_ttf's GPU glyph atlas) and a backdrop blur, with transform and scissor stacks, blend
@@ -22,7 +23,13 @@ It never logs: failures come back as `gpu2d::GpuError` or as error strings.
 
 CMake 3.20+, a C++20 compiler (Clang is the verification toolchain), Ninja, `glslc`, and
 pkg-config modules `sdl3` (3.2+), `sdl3-ttf`, `harfbuzz` (2.8.2+), `sdl3-image`, `libpng`, plus
-Xlib. Tests also need `libwebp` and a Vulkan driver (lavapipe works).
+Xlib on X11 systems. Tests also need `libwebp` and a Vulkan driver (lavapipe works).
+
+macOS (arm64, Metal) additionally needs SDL_shadercross to translate the shaders to MSL; it has no
+releases, so `cmake -DPREFIX=<dir> -P cmake/ProvisionShadercross.cmake` builds the pinned,
+checksummed source into `<dir>`, and gpu2d is configured with
+`-DGPU2D_SHADERCROSS=<dir>/bin/shadercross`. With Homebrew:
+`brew install ninja pkgconf shaderc sdl3 sdl3_ttf sdl3_image harfbuzz libpng webp`.
 
 Fedora: `sudo dnf install clang ninja-build cmake glslc SDL3-devel SDL3_ttf-devel harfbuzz-devel SDL3_image-devel libpng-devel libX11-devel libwebp-devel mesa-vulkan-drivers`
 
@@ -35,7 +42,7 @@ target_link_libraries(app PRIVATE gpu2d::render)   # or gpu2d::ui, or gpu2d::ima
 ```
 
 `gpu2d_compile_shaders(target shader.vert shader.frag ...)` is available to consumers for their
-own shaders.
+own shaders. With `GPU2D_SHADER_MSL` (on by default for Apple targets) it also emits MSL.
 
 ## Build and test
 

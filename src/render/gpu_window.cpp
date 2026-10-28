@@ -7,10 +7,18 @@
 #include <SDL3/SDL_properties.h>
 
 #include "gpu2d/gpu_error.hpp"
+#include "gpu2d/pipeline.hpp"
 #include "window_platform.hpp"
 
 namespace gpu2d {
 namespace {
+
+// SDL GPU's backend on Apple systems is Metal; everywhere else gpu2d draws through Vulkan.
+#ifdef __APPLE__
+constexpr const char *gpuDriver = "metal";
+#else
+constexpr const char *gpuDriver = "vulkan";
+#endif
 
 /// Without vsync when hidden: nothing is seen, and a frame should not wait for a display.
 SDL_GPUPresentMode choosePresentMode(SDL_GPUDevice *device, SDL_Window *window, bool hidden) {
@@ -43,9 +51,9 @@ GpuWindow::GpuWindow(const WindowOptions &options) {
     if (window_ == nullptr) {
       throw GpuError{"cannot open a window"};
     }
-    device_ = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, "vulkan");
+    device_ = SDL_CreateGPUDevice(builtShaderFormats(), false, gpuDriver);
     if (device_ == nullptr) {
-      throw GpuError{"cannot open a Vulkan GPU device"};
+      throw GpuError{std::string{"cannot open a "} + gpuDriver + " GPU device"};
     }
     if (!SDL_ClaimWindowForGPUDevice(device_, window_)) {
       throw GpuError{"cannot draw into the window"};

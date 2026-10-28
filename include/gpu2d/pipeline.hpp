@@ -1,9 +1,11 @@
-// pipeline — shaders from embedded SPIR-V and the graphics pipelines of one shader pair, made per
-// target format and blend mode on first use (SDL GPU bakes both into a pipeline).
+// pipeline — shaders from embedded SPIR-V or MSL, whichever the device takes, and the graphics
+// pipelines of one shader pair, made per target format and blend mode on first use (SDL GPU bakes
+// both into a pipeline).
 #pragma once
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <SDL3/SDL_gpu.h>
@@ -21,9 +23,14 @@ enum class BlendMode : std::uint8_t {
   Replace,
 };
 
+/// The shader formats gpu2d's own shaders are built in: SPIR-V, and MSL where built with it.
+[[nodiscard]] SDL_GPUShaderFormat builtShaderFormats() noexcept;
+
 /// One shader stage and the resources it declares (SDL GPU needs the counts up front).
 struct ShaderStage {
   std::span<const std::uint32_t> spirv;
+  /// The same stage in MSL, entry point `main0`; empty in a build without MSL.
+  std::string_view msl;
   SDL_GPUShaderStage stage{SDL_GPU_SHADERSTAGE_VERTEX};
   std::uint32_t samplers{};
   std::uint32_t storageBuffers{};
@@ -39,7 +46,8 @@ struct VertexInput {
 
 class PipelineSet {
 public:
-  /// Compiles both stages; throws GpuError when the driver refuses them.
+  /// Compiles both stages in the first of SPIR-V and MSL the device takes; throws GpuError when
+  /// the driver refuses them or takes neither.
   PipelineSet(SDL_GPUDevice &device, const ShaderStage &vertex, const ShaderStage &fragment,
               VertexInput input);
 

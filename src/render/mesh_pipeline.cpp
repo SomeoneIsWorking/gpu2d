@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <string_view>
 
 namespace gpu2d {
 namespace {
@@ -10,8 +11,20 @@ constexpr std::uint32_t vertexCode[] = {
 #include "mesh.vert.inc"
 };
 
+constexpr std::string_view vertexMsl{
+#ifdef GPU2D_SHADER_MSL
+#include "mesh.vert.msl.inc"
+#endif
+};
+
 constexpr std::uint32_t fragmentCode[] = {
 #include "mesh.frag.inc"
+};
+
+constexpr std::string_view fragmentMsl{
+#ifdef GPU2D_SHADER_MSL
+#include "mesh.frag.msl.inc"
+#endif
 };
 
 constexpr std::array<SDL_GPUVertexBufferDescription, 1> buffers{SDL_GPUVertexBufferDescription{
@@ -40,9 +53,12 @@ constexpr std::array<SDL_GPUVertexAttribute, 3> attributes{
 
 MeshPipeline::MeshPipeline(SDL_GPUDevice &device)
     : pipelines_{device,
-                 ShaderStage{
-                     .spirv = vertexCode, .stage = SDL_GPU_SHADERSTAGE_VERTEX, .uniformBuffers = 1},
+                 ShaderStage{.spirv = vertexCode,
+                             .msl = vertexMsl,
+                             .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+                             .uniformBuffers = 1},
                  ShaderStage{.spirv = fragmentCode,
+                             .msl = fragmentMsl,
                              .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
                              .samplers = 1,
                              .uniformBuffers = 1},

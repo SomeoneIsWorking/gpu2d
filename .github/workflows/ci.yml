@@ -43,3 +43,32 @@ jobs:
         env:
           VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
         run: xvfb-run -a ctest --test-dir build/ci --output-on-failure
+
+  macos:
+    name: macos / arm64
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Install native verification tools
+        run: brew install ninja pkgconf shaderc sdl3 sdl3_ttf sdl3_image harfbuzz libpng webp
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build the pinned SDL_shadercross
+        run: cmake -DPREFIX="$RUNNER_TEMP/shadercross" -P cmake/ProvisionShadercross.cmake
+      - name: Configure with AppleClang and Ninja
+        run: >-
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DGPU2D_SHADERCROSS="$RUNNER_TEMP/shadercross/bin/shadercross"
+      - name: Build
+        run: cmake --build build/ci --parallel 3
+      - name: Compile the MSL with Apple's Metal compiler
+        run: |
+          for msl in build/ci/shaders/*.msl; do
+            xcrun -sdk macosx metal -Werror -c "$msl" -o "${msl%.msl}.air"
+          done
+      - name: Test without a GPU
+        run: ctest --test-dir build/ci --output-on-failure -LE gpu
+      - name: Test on the runner's Metal device
+        run: ctest --test-dir build/ci --output-on-failure -L gpu
