@@ -50,16 +50,18 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Install native verification tools
-        run: brew install ninja pkgconf shaderc sdl3 sdl3_ttf sdl3_image harfbuzz libpng webp
+        run: brew install llvm ninja pkgconf shaderc sdl3 sdl3_ttf sdl3_image harfbuzz libpng webp
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Build the pinned SDL_shadercross
         run: cmake -DPREFIX="$RUNNER_TEMP/shadercross" -P cmake/ProvisionShadercross.cmake
-      - name: Configure with AppleClang and Ninja
+      # Homebrew's Clang: Xcode 16's libc++ still keeps std::jthread behind -fexperimental-library.
+      - name: Configure with Clang and Ninja
         run: >-
           cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++"
           -DGPU2D_SHADERCROSS="$RUNNER_TEMP/shadercross/bin/shadercross"
       - name: Build
         run: cmake --build build/ci --parallel 3
