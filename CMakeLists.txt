@@ -114,23 +114,27 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_compile_options(gpu2d_image_test PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME image COMMAND gpu2d_image_test)
 
-    # A real GPU device behind a hidden (unmapped) window, drawing offscreen.
-    foreach(name canvas text)
+    # A real GPU device behind a hidden (unmapped) window, drawing offscreen; labelled `gpu`.
+    foreach(name canvas text image_loader)
       add_executable(gpu2d_${name}_test tests/${name}_test.cpp)
-      target_link_libraries(gpu2d_${name}_test PRIVATE gpu2d::render X11::X11)
+      target_link_libraries(gpu2d_${name}_test PRIVATE gpu2d::render)
       target_compile_options(gpu2d_${name}_test PRIVATE -Wall -Wextra -Wpedantic)
     endforeach()
     # The outlined label is drawn through the toolkit's face.
     target_link_libraries(gpu2d_text_test PRIVATE gpu2d::ui)
+    target_compile_definitions(gpu2d_image_loader_test PRIVATE GPU2D_TEST_SCRATCH="${scratch}")
     add_test(NAME canvas COMMAND gpu2d_canvas_test)
     add_test(NAME text
       COMMAND gpu2d_text_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/fonts/CalSans-Regular.ttf")
-
-    add_executable(gpu2d_image_loader_test tests/image_loader_test.cpp)
-    target_link_libraries(gpu2d_image_loader_test PRIVATE gpu2d::render X11::X11)
-    target_compile_definitions(gpu2d_image_loader_test PRIVATE GPU2D_TEST_SCRATCH="${scratch}")
-    target_compile_options(gpu2d_image_loader_test PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME image_loader COMMAND gpu2d_image_loader_test)
+    set_tests_properties(canvas text image_loader PROPERTIES LABELS gpu)
+    if(TARGET X11::X11)
+      add_executable(gpu2d_window_x11_test tests/window_x11_test.cpp)
+      target_link_libraries(gpu2d_window_x11_test PRIVATE gpu2d::render X11::X11)
+      target_compile_options(gpu2d_window_x11_test PRIVATE -Wall -Wextra -Wpedantic)
+      add_test(NAME window_x11 COMMAND gpu2d_window_x11_test)
+      set_tests_properties(window_x11 PROPERTIES LABELS gpu)
+    endif()
 
     # The toolkit through its public headers with a fake face: no GPU.
     foreach(name layout navigator widgets cell_grid tab_dock)

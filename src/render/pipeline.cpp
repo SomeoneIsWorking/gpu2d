@@ -10,10 +10,21 @@ namespace {
 
 ShaderHandle makeShader(SDL_GPUDevice &device, const ShaderStage &stage) {
   SDL_GPUShaderCreateInfo info{};
-  info.code = reinterpret_cast<const Uint8 *>(stage.spirv.data());
-  info.code_size = stage.spirv.size_bytes();
-  info.entrypoint = "main";
-  info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  const SDL_GPUShaderFormat taken = SDL_GetGPUShaderFormats(&device);
+  if ((taken & SDL_GPU_SHADERFORMAT_SPIRV) != 0 && !stage.spirv.empty()) {
+    info.code = reinterpret_cast<const Uint8 *>(stage.spirv.data());
+    info.code_size = stage.spirv.size_bytes();
+    info.entrypoint = "main";
+    info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  } else if ((taken & SDL_GPU_SHADERFORMAT_MSL) != 0 && !stage.msl.empty()) {
+    info.code = reinterpret_cast<const Uint8 *>(stage.msl.data());
+    info.code_size = stage.msl.size();
+    // SPIR-V's `main` is a reserved name in MSL.
+    info.entrypoint = "main0";
+    info.format = SDL_GPU_SHADERFORMAT_MSL;
+  } else {
+    throw GpuError{"the device takes neither SPIR-V nor this build's MSL"};
+  }
   info.stage = stage.stage;
   info.num_samplers = stage.samplers;
   info.num_storage_buffers = stage.storageBuffers;
@@ -41,6 +52,14 @@ SDL_GPUColorTargetBlendState blendState(BlendMode blend) {
 }
 
 } // namespace
+
+SDL_GPUShaderFormat builtShaderFormats() noexcept {
+#ifdef GPU2D_SHADER_MSL
+  return SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL;
+#else
+  return SDL_GPU_SHADERFORMAT_SPIRV;
+#endif
+}
 
 PipelineSet::PipelineSet(SDL_GPUDevice &device, const ShaderStage &vertex,
                          const ShaderStage &fragment, VertexInput input)
