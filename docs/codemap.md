@@ -29,7 +29,7 @@ library itself never logs.
 | Shader build | `cmake/Gpu2dShaders.cmake` | `gpu2d_compile_shaders(target ...)`: glslc to SPIR-V word lists included by the C++, and with `GPU2D_SHADER_MSL` (default on Apple) SDL_shadercross's MSL as raw string literals, the target getting `GPU2D_SHADER_MSL` defined; consumers may reuse it |
 | shadercross provisioning | `cmake/ProvisionShadercross.cmake` | Builds the pinned, checksummed SDL_shadercross CLI and SPIRV-Cross (with its `spirv-cross` CLI) into a prefix: `cmake -DPREFIX=<dir> -P cmake/ProvisionShadercross.cmake` |
 | Tests | `tests/` | `image_test` (PNG round trip, WebP/JPEG decode, refusals, resize), `canvas_test`, `text_test` and `image_loader_test` (on a device behind a hidden window; pixels drawn offscreen and read back; ctest label `gpu`), `window_x11_test` (the hidden window's X11 visual and map state, X11 only), `ui_layout`, `ui_navigator`, `ui_widgets` (the toolkit with fake text, no GPU) |
-| CI | `.github/workflows/ci.yml` | Fedora container, Clang and Ninja, CTest on Mesa's lavapipe; macOS arm64: pinned shadercross, AppleClang build, Apple's `metal` compiles every MSL, CTest |
+| CI | `.github/workflows/ci.yml` | Fedora container, Clang and Ninja, CTest on Mesa's lavapipe; macOS arm64: pinned shadercross, Homebrew Clang build, Apple's `metal` compiles every MSL, CTest |
 
 ## Data flow
 
