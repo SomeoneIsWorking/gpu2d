@@ -53,8 +53,10 @@ it is done, never under the widget handling it.
   a row.
 - Scrolling eases the focus into view with the section spacing as margin; the first focusable
   reveals the top, the last the end. Focus the pointer moved scrolls nothing.
-- Every hint bar shows the top screen's prompts: the focused widget's, then the screen's ones not
-  already named, less those naming an action the app's `Prompts::bound` says the device cannot do
+- The top screen's own hint bars, or every bar when it has none (an overlay over a page),
+  show the top screen's prompts; the bars under a screen that has its own stay empty, so none
+  shows dimmed below an overlay's card. The prompts: the focused widget's, then the screen's ones
+  not already named, less those naming an action the app's `Prompts::bound` says the device cannot do
   now; Back stands first. A bar too narrow for all of them drops the last ones. A press
   on a prompt performs its action.
 - Typed text goes to the focused widget's `type`, then the screen. A text field is being edited
