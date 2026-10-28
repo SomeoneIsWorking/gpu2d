@@ -68,7 +68,7 @@ jobs:
       - name: Compile the MSL with Apple's Metal compiler
         run: |
           for msl in build/ci/shaders/*.msl; do
-            xcrun -sdk macosx metal -Werror -c "$msl" -o "${msl%.msl}.air"
+            xcrun -sdk macosx metal -Werror -x metal -c "$msl" -o "${msl%.msl}.air"
           done
       - name: Test without a GPU
         run: ctest --test-dir build/ci --output-on-failure -LE gpu
