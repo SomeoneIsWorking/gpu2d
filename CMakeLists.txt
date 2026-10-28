@@ -120,6 +120,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       target_link_libraries(gpu2d_${name}_test PRIVATE gpu2d::render X11::X11)
       target_compile_options(gpu2d_${name}_test PRIVATE -Wall -Wextra -Wpedantic)
     endforeach()
+    # The outlined label is drawn through the toolkit's face.
+    target_link_libraries(gpu2d_text_test PRIVATE gpu2d::ui)
     add_test(NAME canvas COMMAND gpu2d_canvas_test)
     add_test(NAME text
       COMMAND gpu2d_text_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/fonts/CalSans-Regular.ttf")

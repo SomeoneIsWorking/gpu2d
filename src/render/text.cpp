@@ -18,6 +18,10 @@ int quarterPixels(float size) {
   return std::max(static_cast<int>(std::lround(size * 4.0f)), 1);
 }
 
+int outlinePixels(float outline) {
+  return std::max(static_cast<int>(std::lround(outline)), 0);
+}
+
 } // namespace
 
 void Text::FontClose::operator()(TTF_Font *font) const noexcept {
@@ -70,18 +74,21 @@ Text::~Text() {
   }
 }
 
-TTF_Font *Text::font(float size) {
-  const int key = quarterPixels(size);
+TTF_Font *Text::font(float size, int outline) {
+  const std::pair<int, int> key{quarterPixels(size), outline};
   const auto found = fonts_.find(key);
   if (found != fonts_.end()) {
     return found->second.get();
   }
-  Font opened{TTF_OpenFont(face_.string().c_str(), static_cast<float>(key) / 4.0f)};
+  Font opened{TTF_OpenFont(face_.string().c_str(), static_cast<float>(key.first) / 4.0f)};
   if (opened == nullptr) {
     return nullptr;
   }
   TTF_SetFontHinting(opened.get(), options_.hinted ? TTF_HINTING_LIGHT : TTF_HINTING_NONE);
   TTF_SetFontKerning(opened.get(), options_.kerned);
+  if (outline > 0 && !TTF_SetFontOutline(opened.get(), outline)) {
+    return nullptr;
+  }
   return fonts_.emplace(key, std::move(opened)).first->second.get();
 }
 
@@ -173,14 +180,14 @@ Text::Layout Text::layout(std::string_view text, const TextStyle &style) {
   return out;
 }
 
-Text::Run &Text::run(std::string_view cluster, float size) {
-  RunKey key{quarterPixels(size), std::string{cluster}};
+Text::Run &Text::run(std::string_view cluster, float size, int outline) {
+  RunKey key{quarterPixels(size), outline, std::string{cluster}};
   const auto found = runs_.find(key);
   if (found != runs_.end()) {
     return found->second;
   }
   Run made;
-  TTF_Font *face = font(size);
+  TTF_Font *face = font(size, outline);
   if (face != nullptr) {
     made.text.reset(TTF_CreateText(engine_, face, cluster.data(), cluster.size()));
   }
@@ -198,6 +205,9 @@ Text::Run &Text::run(std::string_view cluster, float size) {
     inkLeft = 0;
   }
   const auto penShift = static_cast<float>(std::min(inkLeft, 0));
+  // SDL3_ttf places an outlined glyph twice its outline right of and below the plain one; move it
+  // back so the outline is centred on the glyph.
+  const auto grown = 2.0f * static_cast<float>(outline);
   for (const TTF_GPUAtlasDrawSequence *sequence = TTF_GetGPUTextDrawData(made.text.get());
        sequence != nullptr; sequence = sequence->next) {
     Sequence out;
@@ -205,8 +215,9 @@ Text::Run &Text::run(std::string_view cluster, float size) {
     out.vertices.reserve(static_cast<std::size_t>(sequence->num_vertices));
     // SDL3_ttf's positions are y up from the line box's top-left.
     for (int i = 0; i < sequence->num_vertices; ++i) {
-      out.vertices.push_back(Vertex{sequence->xy[i].x + penShift, -sequence->xy[i].y,
-                                    sequence->uv[i].x, sequence->uv[i].y});
+      out.vertices.push_back(Vertex{sequence->xy[i].x + penShift - grown,
+                                    -sequence->xy[i].y - grown, sequence->uv[i].x,
+                                    sequence->uv[i].y});
     }
     out.indices.assign(sequence->indices, sequence->indices + sequence->num_indices);
     made.sequences.push_back(std::move(out));
@@ -223,7 +234,7 @@ bool Text::draw(Canvas &canvas, std::string_view text, Point topLeft, const Text
   bool shaped = true;
   std::vector<Vertex> placed;
   for (const Placed &character : layout(text, style).characters) {
-    Run &glyphs = run(character.cluster, style.size);
+    Run &glyphs = run(character.cluster, style.size, outlinePixels(style.outline));
     glyphs.drawn = true;
     if (!glyphs.shaped) {
       shaped = false;
