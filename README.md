@@ -8,6 +8,8 @@ A small C++20 2D drawing library on the SDL3 GPU API (Vulkan), and a GPU-free im
   from SDL3_ttf's GPU glyph atlas) and a backdrop blur, with transform and scissor stacks, blend
   modes and offscreen render targets that read back to RGBA.
   Draws are batched into few GPU passes.
+  An image loader decodes on worker threads and lands textures a frame's budget at a time; see
+  [docs/image-loader.md](docs/image-loader.md).
 - `gpu2d::ui`: a widget toolkit on that canvas for menus and settings screens: theme tokens,
   layout, standard widgets (rows, switches, choices, sliders, tabs, lists, dialogs, hint bar,
   toast), spatial focus, a screen stack with eased motion; see [docs/ui-toolkit.md](docs/ui-toolkit.md).

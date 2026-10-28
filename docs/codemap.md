@@ -22,11 +22,12 @@ library itself never logs.
 | Streaming buffers | `include/gpu2d/stream_buffer.hpp`, `src/render/stream_buffer.cpp` | Per-frame CPU-to-GPU buffers that grow and cycle |
 | GPU object ownership | `include/gpu2d/gpu_handle.hpp`, `include/gpu2d/gpu_error.hpp`, `src/render/gpu_error.cpp` | RAII handles for SDL GPU objects; the exception carrying SDL's reason |
 | Textures | `include/gpu2d/texture.hpp`, `src/render/texture.cpp` | Upload from RGBA (mipmapped when trilinear) and `TextureView` |
+| Image loading | `include/gpu2d/image_loader.hpp`, `src/render/image_loader.cpp` ([image-loader.md](image-loader.md)) | `ImageLoader`: decodes on worker threads, lands textures on the render thread within a per-frame budget; handles that read pending until then, shared per key, cancelled when dropped, failures reported |
 | Render targets | `include/gpu2d/render_target.hpp`, `include/gpu2d/surface.hpp`, `src/render/render_target.cpp` | Offscreen RGBA8 targets, sampled or read back into a `Bitmap` |
 | Text | `include/gpu2d/text.hpp`, `src/render/text.cpp` | The one text layout: HarfBuzz shapes a label (kerning per `FaceOptions`) and each character stands at its exact fractional pen, letter spacing included; SDL3_ttf rasterises each character into its GPU atlas; metrics, glyph ink bounds, measuring (the exact advance), cached characters retired after submit |
 | UI toolkit | `include/gpu2d/ui/`, `src/ui/` ([ui-toolkit.md](ui-toolkit.md)) | `gpu2d::ui`: theme tokens, layout containers, widgets, spatial focus, the screen stack (`Navigator`), dialogs and choice lists, one motion clock, UTF-8 text fitting; app-supplied face, glyphs and sounds |
 | Shader build | `cmake/Gpu2dShaders.cmake` | `gpu2d_compile_shaders(target ...)`: glslc to SPIR-V word lists included by the C++; consumers may reuse it |
-| Tests | `tests/` | `image_test` (PNG round trip, WebP/JPEG decode, refusals, resize), `canvas_test` and `text_test` (pixels drawn offscreen behind a hidden window and read back), `ui_layout`, `ui_navigator`, `ui_widgets` (the toolkit with fake text, no GPU) |
+| Tests | `tests/` | `image_test` (PNG round trip, WebP/JPEG decode, refusals, resize), `canvas_test`, `text_test` and `image_loader_test` (on a device behind a hidden window; pixels drawn offscreen and read back), `ui_layout`, `ui_navigator`, `ui_widgets` (the toolkit with fake text, no GPU) |
 | CI | `.github/workflows/ci.yml` | Fedora container, Clang and Ninja, CTest on Mesa's lavapipe |
 
 ## Data flow
@@ -42,6 +43,8 @@ command buffer, then calls `Text::retire()` so labels not drawn that frame free 
 - Per-shape data lives in storage buffers, never uniform pushes (SDL GPU drops pushes past 4 KB).
 - A blur's scene target must have been drawn in an earlier pass than the one the blur lands in.
 - `gpu2d::image` needs no window or GPU and is safe on worker threads.
+- An `ImageLoader`'s decodes run on its workers; its textures are made and released on the render
+  thread in `upload`.
 
 ## Testing
 
