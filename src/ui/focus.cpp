@@ -14,9 +14,20 @@ constexpr float coneSlope = 2.0f;
 // Among boxes that overlap across the direction, the nearer centre wins.
 constexpr float centreWeight = 0.01f;
 
-/// The gap between the spans [a0, a1] and [b0, b1]; zero when they overlap.
-float spanGap(float a0, float a1, float b0, float b1) noexcept {
-  return std::max({0.0f, b0 - a1, a0 - b1});
+/// A box's extent across the direction.
+struct Span {
+  float start;
+  float end;
+};
+
+/// How far aside `there` is from `here` when their centres are `offset` apart across the
+/// direction, by how much of the narrower span the other covers: none when one covers it, the
+/// centres' offset when they do not overlap, edges that only touch included.
+float acrossOf(Span here, Span there, float offset) noexcept {
+  const float overlap = std::min(here.end, there.end) - std::max(here.start, there.start);
+  const float narrower = std::min(here.end - here.start, there.end - there.start);
+  const float covered = narrower > 0.0f ? std::clamp(overlap / narrower, 0.0f, 1.0f) : 0.0f;
+  return offset * (1.0f - covered);
 }
 
 } // namespace
@@ -37,15 +48,16 @@ std::optional<std::size_t> nearestInDirection(std::span<const Rect> boxes, const
     if (along <= 0.5f) {
       continue;
     }
-    const float across = horizontal ? spanGap(from.y, from.bottom(), there.y, there.bottom())
-                                    : spanGap(from.x, from.right(), there.x, there.right());
+    const float offset = std::abs(horizontal ? dy : dx);
+    const float across = horizontal
+                             ? acrossOf({from.y, from.bottom()}, {there.y, there.bottom()}, offset)
+                             : acrossOf({from.x, from.right()}, {there.x, there.right()}, offset);
     if (across > coneSlope * along) {
       continue;
     }
     const float gap = std::max(
         0.0f, horizontal ? (sign > 0.0f ? there.x - from.right() : from.x - there.right())
                          : (sign > 0.0f ? there.y - from.bottom() : from.y - there.bottom()));
-    const float offset = std::abs(horizontal ? dy : dx);
     const float score = alongWeight * gap * gap + across * across + centreWeight * offset * offset;
     if (!best || score < bestScore) {
       best = i;

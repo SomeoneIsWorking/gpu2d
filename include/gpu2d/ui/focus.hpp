@@ -1,7 +1,8 @@
 // focus — which box a direction press moves to among boxes placed freely: the nearest that way
-// within a cone. The gap between the boxes across the direction costs far more than the distance
-// along it, so a box straight ahead beats a nearer diagonal one, and boxes of different widths
-// that overlap across the direction are straight ahead of each other.
+// within a cone. How far aside a box is costs far more than the distance along the direction, so a
+// box straight ahead beats a nearer diagonal one. A box that covers the other's span across the
+// direction is straight ahead of it, whatever their widths; one that does not overlap it, even
+// one whose edge only touches it, is as far aside as its centre.
 #pragma once
 
 #include <cstddef>

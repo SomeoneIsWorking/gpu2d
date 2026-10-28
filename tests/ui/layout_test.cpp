@@ -166,6 +166,19 @@ void spatialFocusPrefersStraightAhead() {
          "the nearest box by centre");
 }
 
+void spatialFocusTouchingIsNotOverlapping() {
+  const std::vector<Rect> boxes{
+      {0.0f, -80.0f, 40.0f, 40.0f},  // straight above, two steps
+      {40.0f, -40.0f, 40.0f, 40.0f}, // up-right, its corner touching
+      {60.0f, -10.0f, 40.0f, 40.0f}, // right, a little higher
+  };
+  const Rect from{0.0f, 0.0f, 40.0f, 40.0f};
+  expect(ui::nearestInDirection(boxes, from, ui::Direction::Up) == 0u,
+         "a box whose edge only touches is diagonal, not straight ahead");
+  expect(ui::nearestInDirection(boxes, from, ui::Direction::Right) == 2u,
+         "a box mostly level is straight ahead");
+}
+
 } // namespace
 
 int main() {
@@ -175,6 +188,7 @@ int main() {
   gridAndCentre();
   scrollViewClampsItsOffset();
   spatialFocusPrefersStraightAhead();
+  spatialFocusTouchingIsNotOverlapping();
   std::printf("ui layout: all checks passed\n");
   return 0;
 }
