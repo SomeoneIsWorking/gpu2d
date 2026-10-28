@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <vector>
 
+#include "gpu2d/ui/typesetter.hpp"
 #include "gpu_fixture.hpp"
 
 namespace {
@@ -38,6 +39,22 @@ int coverage(const gpu2d::image::Bitmap &frame, const Area &area) {
     }
   }
   return covered;
+}
+
+/// The box of every pixel more than a quarter covered.
+Area inked(const gpu2d::image::Bitmap &frame) {
+  Area box{64, 64, 0, 0};
+  for (int y = 0; y < 64; ++y) {
+    for (int x = 0; x < 64; ++x) {
+      if (at(frame, x, y).a > 64) {
+        box.left = std::min(box.left, x);
+        box.right = std::max(box.right, x + 1);
+        box.top = std::min(box.top, y);
+        box.bottom = std::max(box.bottom, y + 1);
+      }
+    }
+  }
+  return box;
 }
 
 void measures(Text &text) {
@@ -166,6 +183,72 @@ void glyphsStandAtTheirPens(GpuFixture &gpu, Text &text) {
   }
 }
 
+void outlineGrowsTheGlyph(GpuFixture &gpu, Text &text) {
+  const TextStyle plain{.size = 24.0f, .tracking = 0.0f};
+  const TextStyle outlined{.size = 24.0f, .tracking = 0.0f, .outline = 3.0f};
+  const Colour white{255, 255, 255, 255};
+  const auto glyph = gpu.draw([&](Canvas &canvas) {
+    expect(text.draw(canvas, "o", Point{20.0f, 10.0f}, plain, white), "the glyph shapes");
+  });
+  const auto grown = gpu.draw([&](Canvas &canvas) {
+    expect(text.draw(canvas, "o", Point{20.0f, 10.0f}, outlined, white), "the outline shapes");
+  });
+  text.retire();
+  const Area inner = inked(glyph);
+  const Area outer = inked(grown);
+  near(static_cast<float>(inner.left - outer.left), 3.0f, "the outline reaches left of the ink",
+       1.0);
+  near(static_cast<float>(outer.right - inner.right), 3.0f, "and right of it", 1.0);
+  near(static_cast<float>(inner.top - outer.top), 3.0f, "above it", 1.0);
+  near(static_cast<float>(outer.bottom - inner.bottom), 3.0f, "and below it", 1.0);
+  expect(text.measure("o", outlined) == text.measure("o", plain),
+         "an outline does not change the advance");
+}
+
+/// The app's side of the toolkit's face, over the face under test.
+class Face final : public gpu2d::ui::Typesetter {
+public:
+  explicit Face(Text &text) : text_{text} {
+  }
+  [[nodiscard]] float measure(std::string_view label, float size) override {
+    return text_.measure(label, TextStyle{.size = size});
+  }
+  [[nodiscard]] float lineHeight(float size) override {
+    return text_.metrics(size).lineBox();
+  }
+  void draw(Canvas &canvas, std::string_view label, Point topLeft, float size,
+            Colour colour) override {
+    text_.draw(canvas, label, topLeft, TextStyle{.size = size}, colour);
+  }
+  void drawOutline(Canvas &canvas, std::string_view label, Point topLeft, float size, float outline,
+                   Colour colour) override {
+    text_.draw(canvas, label, topLeft, TextStyle{.size = size, .outline = outline}, colour);
+  }
+
+private:
+  Text &text_;
+};
+
+void outlinedLabelReadsOnItsOwnGround(GpuFixture &gpu, Text &text) {
+  Face face{text};
+  const Colour white{255, 255, 255, 255};
+  const Colour black{0, 0, 0, 255};
+  const auto frame = gpu.draw([&](Canvas &canvas) {
+    face.drawCentredOutlined(canvas, "I", Point{30.0f, 32.0f}, 24.0f, white, 2.0f, black);
+  });
+  text.retire();
+  const Area box = inked(frame);
+  const int middle = (box.top + box.bottom) / 2;
+  int whites = 0;
+  for (int x = box.left; x < box.right; ++x) {
+    const auto pixel = at(frame, x, middle);
+    whites += pixel.a > 200 && pixel.r > 200 ? 1 : 0;
+  }
+  const auto edge = at(frame, box.left, middle);
+  expect(whites > 0, "the label is drawn in its colour");
+  expect(edge.a > 64 && edge.r < 64, "a dark edge stands outside it");
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -182,6 +265,8 @@ int main(int argc, char **argv) {
   inkMatchesWhatIsDrawn(gpu, text);
   spacesKeepTheirWidth(text);
   glyphsStandAtTheirPens(gpu, text);
+  outlineGrowsTheGlyph(gpu, text);
+  outlinedLabelReadsOnItsOwnGround(gpu, text);
   std::printf("text: all checks passed\n");
   return 0;
 }

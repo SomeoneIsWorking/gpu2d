@@ -535,6 +535,9 @@ public:
   void draw(Canvas & /*canvas*/, std::string_view /*text*/, Point /*topLeft*/, float /*size*/,
             Colour /*colour*/) override {
   }
+  void drawOutline(Canvas & /*canvas*/, std::string_view /*text*/, Point /*topLeft*/,
+                   float /*size*/, float /*outline*/, Colour /*colour*/) override {
+  }
 
   std::string word{"1 game from Epic"};
   float width{std::nextafter(110.0f, 200.0f)};

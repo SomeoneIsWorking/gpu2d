@@ -22,6 +22,9 @@ public:
   void draw(Canvas & /*canvas*/, std::string_view /*text*/, Point /*topLeft*/, float /*size*/,
             Colour /*colour*/) override {
   }
+  void drawOutline(Canvas & /*canvas*/, std::string_view /*text*/, Point /*topLeft*/,
+                   float /*size*/, float /*outline*/, Colour /*colour*/) override {
+  }
 };
 
 class FakePrompts final : public ui::Prompts {

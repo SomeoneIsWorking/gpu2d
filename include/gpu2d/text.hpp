@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -40,6 +41,9 @@ struct TextStyle {
   float size{};
   /// Letter spacing, in ems.
   float tracking{};
+  /// Above zero, each glyph is drawn grown by this many pixels all round (FreeType's stroker,
+  /// rounded to whole pixels), in place of the glyph: drawn under the plain label, an outline.
+  float outline{};
 };
 
 /// A face's vertical metrics at one size, in pixels; the line box is ascent to descent.
@@ -132,20 +136,21 @@ private:
     bool drawn{false};
     bool shaped{false};
   };
-  /// Size in quarter pixels, then the character.
-  using RunKey = std::pair<int, std::string>;
+  /// Size in quarter pixels, outline in pixels, then the character.
+  using RunKey = std::tuple<int, int, std::string>;
 
-  [[nodiscard]] TTF_Font *font(float size);
+  [[nodiscard]] TTF_Font *font(float size, int outline = 0);
   [[nodiscard]] hb_font_t *shaper(float size);
   [[nodiscard]] Layout layout(std::string_view text, const TextStyle &style);
-  [[nodiscard]] Run &run(std::string_view cluster, float size);
+  [[nodiscard]] Run &run(std::string_view cluster, float size, int outline);
 
   std::filesystem::path face_;
   FaceOptions options_;
   bool ttfUp_{false};
   TTF_TextEngine *engine_{};
   std::unique_ptr<hb_face_t, ShaperFaceDestroy> shaperFace_;
-  std::map<int, Font> fonts_;
+  /// By size in quarter pixels and outline in pixels.
+  std::map<std::pair<int, int>, Font> fonts_;
   std::map<int, ShaperFont> shapers_;
   std::map<RunKey, Run> runs_;
 };

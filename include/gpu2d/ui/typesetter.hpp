@@ -26,9 +26,15 @@ public:
   /// Draws `text` with the top of its line at `topLeft.y`.
   virtual void draw(Canvas &canvas, std::string_view text, Point topLeft, float size,
                     Colour colour) = 0;
+  /// Draws `text` where `draw` would, each glyph grown by `outline` pixels all round.
+  virtual void drawOutline(Canvas &canvas, std::string_view text, Point topLeft, float size,
+                           float outline, Colour colour) = 0;
 
   /// Draws `text` from `start.x` with its line centred on `start.y`.
   void drawCentred(Canvas &canvas, std::string_view text, Point start, float size, Colour colour);
+  /// As `drawCentred`, over an outline `outline` pixels wide in `edge`, so it reads on any ground.
+  void drawCentredOutlined(Canvas &canvas, std::string_view text, Point start, float size,
+                           Colour colour, float outline, Colour edge);
   /// The size whose line is `height` tall.
   [[nodiscard]] float sizeForLineHeight(float height);
 };
