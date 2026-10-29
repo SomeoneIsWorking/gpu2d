@@ -2,7 +2,8 @@
 # PREFIX, from pinned and checksummed source archives; SDL_shadercross publishes no releases.
 #   cmake -DPREFIX=<dir> -P cmake/ProvisionShadercross.cmake
 # then configure gpu2d with -DGPU2D_SHADERCROSS=<dir>/bin/shadercross (or <dir>/bin on PATH).
-# Needs a C/C++ compiler, CMake, Ninja and SDL3's CMake package. An existing PREFIX is reused.
+# Needs a C/C++ compiler, CMake, Ninja and SDL3's CMake package; the tool keeps an rpath to that
+# SDL3's folder. An existing PREFIX is reused.
 
 cmake_minimum_required(VERSION 3.22)
 
@@ -35,7 +36,8 @@ function(build source binary)
   execute_process(
     COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninja
       -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=${PREFIX}" "-DCMAKE_PREFIX_PATH=${PREFIX}"
-      -DCMAKE_INSTALL_LIBDIR=lib "-DCMAKE_INSTALL_RPATH=${PREFIX}/lib" ${ARGN}
+      -DCMAKE_INSTALL_LIBDIR=lib "-DCMAKE_INSTALL_RPATH=${PREFIX}/lib"
+      -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON ${ARGN}
     COMMAND_ERROR_IS_FATAL ANY)
   execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}" --target install
     COMMAND_ERROR_IS_FATAL ANY)
