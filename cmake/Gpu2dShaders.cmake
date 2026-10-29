@@ -19,7 +19,6 @@ option(GPU2D_SHADER_MSL "Also translate shaders to MSL for SDL GPU's Metal backe
 if(GPU2D_SHADER_MSL)
   find_program(GPU2D_SHADERCROSS shadercross)
 endif()
-set(GPU2D_SHADERS_MODULE "${CMAKE_CURRENT_LIST_FILE}")
 
 # gpu2d_compile_shaders(<target> <source>...): compiles each source (stage from its extension)
 # into <binary dir>/shaders/<name>.inc (and <name>.msl.inc with GPU2D_SHADER_MSL) and puts that
@@ -66,8 +65,8 @@ function(gpu2d_compile_shaders target)
         COMMAND "${GPU2D_SHADERCROSS}" "${output_dir}/${name}.spv" --source SPIRV --dest MSL
           --stage ${stage} --output "${msl}"
         COMMAND "${CMAKE_COMMAND}" "-DMSL=${msl}" "-DOUTPUT=${msl}.inc"
-          -P "${GPU2D_SHADERS_MODULE}"
-        DEPENDS "${source}" ${shared} "${GPU2D_SHADERS_MODULE}"
+          -P "${CMAKE_CURRENT_FUNCTION_LIST_FILE}"
+        DEPENDS "${source}" ${shared} "${CMAKE_CURRENT_FUNCTION_LIST_FILE}"
         COMMENT "Translating ${name} to MSL")
       list(APPEND outputs "${msl}.inc")
     endif()
