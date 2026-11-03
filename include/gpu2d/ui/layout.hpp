@@ -137,7 +137,8 @@ public:
 };
 
 /// One child in a clipped frame, scrolled. Its offset is the screen's, kept by the view's id,
-/// which therefore must not be empty; it eases to where the focus or the wheel sends it.
+/// which therefore must not be empty; it eases to where the focus or the wheel sends it, and a drag
+/// up or down moves it with the pointer.
 class ScrollView : public Widget {
 public:
   explicit ScrollView(std::string id) : Widget{std::move(id)} {
@@ -159,7 +160,13 @@ public:
   [[nodiscard]] bool remembersFocus() const override {
     return true;
   }
+  /// Its content, then a bar showing how far it is scrolled while touch controls show.
   void paint(Painter &painter) const override;
+
+private:
+  /// The offset and the furthest it scrolls, as laid out.
+  float offset_{};
+  float limit_{};
 };
 
 } // namespace gpu2d::ui

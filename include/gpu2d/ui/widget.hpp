@@ -91,6 +91,8 @@ struct LayoutContext {
   Typesetter &text;
   ViewState &state;
   double now{};
+  /// The app shows touch controls: prompts as buttons a finger presses, scroll bars.
+  bool touch{false};
 };
 
 enum class Sound : std::uint8_t { Move, Activate, Back };
@@ -135,6 +137,8 @@ struct Painter {
   float alpha{1.0f};
   /// What can be seen through every clip above; children wholly outside it are skipped.
   Rect visible;
+  /// The app shows touch controls (`LayoutContext::touch`).
+  bool touch{false};
 
   [[nodiscard]] Colour fade(Colour colour) const noexcept {
     return faded(colour, alpha);
@@ -252,6 +256,17 @@ public:
   /// focused widget's and the screen's second action.
   virtual bool context(Point /*at*/, ActContext & /*context*/) {
     return false;
+  }
+  /// Whether it takes a drag that went down on it and has set off `by`; one it takes comes to it
+  /// alone until it ends.
+  [[nodiscard]] virtual bool takesDrag(Point /*by*/) const {
+    return false;
+  }
+  /// The drag it took moved to `at`, `by` since the last move (the whole way, the first time).
+  virtual void drag(Point /*at*/, Point /*by*/, ActContext & /*context*/) {
+  }
+  /// The drag it took ended, the pointer moving at `velocity` pixels a second.
+  virtual void release(Point /*velocity*/, ActContext & /*context*/) {
   }
   /// Whether it draws its own focus, so the navigator's ring stays off it.
   [[nodiscard]] virtual bool drawsFocus() const {

@@ -13,7 +13,8 @@
 //   the row starts adjusting it, Left and Right then step it, A ends that keeping the level and
 //   Back ends it putting back the level it began with; a press on the track sets it and adjusts.
 // - Tabs: LB and RB step them from anywhere on the screen; focusing a tab chooses it.
-// - HintBar: the prompts for the focused widget and the screen, never written by hand.
+// - HintBar: the prompts for the focused widget and the screen, never written by hand; buttons
+//   a finger presses while the app shows touch controls.
 #pragma once
 
 #include <cstddef>
@@ -390,6 +391,9 @@ public:
   void arrange(LayoutContext &context, const Rect &frame) override;
   bool act(Action action, ActContext &context) override;
   bool press(Point at, ActContext &context) override;
+  /// A drag more across than down; it sets the level under the pointer.
+  [[nodiscard]] bool takesDrag(Point by) const override;
+  void drag(Point at, Point by, ActContext &context) override;
   [[nodiscard]] std::vector<Hint> hints() const override;
   [[nodiscard]] int level() const noexcept {
     return level_;
@@ -411,6 +415,8 @@ private:
   void begin();
   /// Stops adjusting, keeping the level.
   void end();
+  /// Sets the level the track gives at `at.x`, clamped to its ends.
+  void setAt(Point at, ActContext &context);
 
   Range range_;
   int level_;
@@ -534,8 +540,9 @@ public:
   bool press(Point at, ActContext &context) override;
   void paint(Painter &painter) const override;
 
-  /// Lays `hints` out across the bar.
-  void show(std::vector<Hint> hints, const Theme &theme, Typesetter &text, Prompts &prompts);
+  /// Lays `hints` out across the bar; with `touch` each is a button a finger presses.
+  void show(std::vector<Hint> hints, const Theme &theme, Typesetter &text, Prompts &prompts,
+            bool touch);
   /// The prompts it shows, in order.
   [[nodiscard]] std::vector<Hint> shown() const;
 
@@ -548,6 +555,7 @@ private:
     Rect whole;
   };
   std::vector<Placed> placed_;
+  bool touch_{false};
 };
 
 /// A short message low on the screen that fades in and out.

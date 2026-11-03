@@ -2,8 +2,9 @@
 // pictures, paged or scrolling): one focusable widget whose cells hold the focus inside it.
 // Directions move the cell focus by the app's rule; the pointer focuses the cell it moves onto; a
 // press on a cell focuses it and is A, on a page control it turns to that page; a secondary press
-// on a cell focuses it and asks for its menu (Options); the wheel steps the app's way. What A and
-// Options do is the screen's. The cells draw their own focus.
+// on a cell focuses it and asks for its menu (Options); the wheel steps, and a drag the cells take
+// moves them, the app's way. What A and Options do is the screen's. The cells draw their own
+// focus.
 #pragma once
 
 #include <cstddef>
@@ -44,6 +45,18 @@ public:
     virtual bool turn(std::size_t page) = 0;
     /// One wheel step, 1 towards the end and -1 towards the start; true when the focus moved.
     virtual bool step(int steps) = 0;
+    /// Whether a drag that set off `by` moves the cells; `drag` and `release` then follow it.
+    [[nodiscard]] virtual bool takesDrag(Point /*by*/) const {
+      return false;
+    }
+    /// The drag moved `by` pixels; true when the focus moved.
+    virtual bool drag(Point /*by*/) {
+      return false;
+    }
+    /// The drag ended moving at `velocity` pixels a second; true when the focus moved.
+    virtual bool release(Point /*velocity*/) {
+      return false;
+    }
     /// What lies under `at`, or nothing.
     [[nodiscard]] virtual std::optional<Spot> at(Point at) const = 0;
     /// Draws the cells in the widget's frame.
@@ -64,6 +77,9 @@ public:
   void hover(Point at, ActContext &context) override;
   bool wheel(float notches, ActContext &context) override;
   bool context(Point at, ActContext &context) override;
+  [[nodiscard]] bool takesDrag(Point by) const override;
+  void drag(Point at, Point by, ActContext &context) override;
+  void release(Point velocity, ActContext &context) override;
   void paint(Painter &painter) const override;
 
 private:

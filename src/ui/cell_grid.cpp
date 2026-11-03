@@ -82,6 +82,22 @@ bool CellGrid::context(Point at, ActContext &context) {
   return true;
 }
 
+bool CellGrid::takesDrag(Point by) const {
+  return cells_.takesDrag(by);
+}
+
+void CellGrid::drag(Point /*at*/, Point by, ActContext &context) {
+  if (cells_.drag(by)) {
+    context.sound(Sound::Move);
+  }
+}
+
+void CellGrid::release(Point velocity, ActContext &context) {
+  if (cells_.release(velocity)) {
+    context.sound(Sound::Move);
+  }
+}
+
 void CellGrid::paint(Painter &painter) const {
   cells_.paint(painter, frame_);
 }

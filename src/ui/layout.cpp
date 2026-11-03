@@ -6,6 +6,10 @@
 namespace gpu2d::ui {
 namespace {
 
+/// A scroll bar's width and its shortest length, in dp.
+constexpr float scrollBarDp = 4.0f;
+constexpr float scrollBarMinDp = 32.0f;
+
 /// The child's height when it is `width` wide: its fixed one or what it measures.
 float heightOf(LayoutContext &context, Widget &child, float width) {
   if (const std::optional<float> fixed = child.fixedHeight()) {
@@ -269,6 +273,7 @@ void ScrollView::arrange(LayoutContext &context, const Rect &frame) {
   ViewState::Scroll &scroll = context.state.scroll(id());
   if (children_.empty()) {
     scroll.limit = 0.0f;
+    limit_ = 0.0f;
     return;
   }
   Widget &content = *children_.front();
@@ -278,12 +283,23 @@ void ScrollView::arrange(LayoutContext &context, const Rect &frame) {
   scroll.offset.aim(std::clamp(scroll.offset.target(), 0.0f, scroll.limit));
   const float offset = std::clamp(
       scroll.offset.step(Timing{context.now, context.theme.motion.scroll}), 0.0f, scroll.limit);
+  offset_ = offset;
+  limit_ = scroll.limit;
   content.arrange(context,
                   Rect{frame.x, frame.y - offset, frame.width, std::max(height, frame.height)});
 }
 
 void ScrollView::paint(Painter &painter) const {
   paintChildren(painter);
+  if (!painter.touch || limit_ <= 0.0f) {
+    return;
+  }
+  const float width = painter.px(scrollBarDp);
+  const float whole = frame_.height + limit_;
+  const float length = std::max(frame_.height * frame_.height / whole, painter.px(scrollBarMinDp));
+  const float y = frame_.y + (frame_.height - length) * (offset_ / limit_);
+  const Rect bar{frame_.right() - width * 2.0f, y, width, length};
+  painter.canvas.fillRoundRect(bar, width * 0.5f, painter.fade(painter.theme.colours.inkFaint));
 }
 
 } // namespace gpu2d::ui

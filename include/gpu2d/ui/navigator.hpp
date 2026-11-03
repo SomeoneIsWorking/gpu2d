@@ -65,6 +65,14 @@ public:
   [[nodiscard]] double now() const noexcept {
     return now_;
   }
+  /// Whether the screens show touch controls (`LayoutContext::touch`), which the app sets from
+  /// the device last used.
+  void setTouch(bool touch) noexcept {
+    touch_ = touch;
+  }
+  [[nodiscard]] bool touch() const noexcept {
+    return touch_;
+  }
 
   /// Puts `root` under every screen for good, in place of any root before it: `pop` and `clear`
   /// leave it, and Back it does not take does nothing.
@@ -109,7 +117,8 @@ public:
   void paintChrome(Canvas &canvas, const Screen &chrome);
 
   /// Builds and lays out the screens drawn in `viewport`; overlays stand above the bottom
-  /// `covered` pixels, which a docked keyboard takes.
+  /// `covered` pixels, which a docked keyboard takes. A press held still past the long-press
+  /// time becomes a `Context` here, once a frame.
   void layout(const Rect &viewport, float covered = 0.0f);
   /// Draws them; after `layout`.
   void paint(Canvas &canvas);
@@ -155,6 +164,25 @@ private:
     std::unique_ptr<Widget> root;
   };
   class Context;
+  /// A press from `Down` to `Up`: still, it is a tap or a long press; moved past the slop, a drag
+  /// of the widget or scroll view that took it.
+  struct Gesture {
+    enum class Drags : std::uint8_t { Nothing, Widget, Scroll };
+    Point start;
+    Point last;
+    double since{};
+    /// It went down on the chrome, which takes taps alone.
+    bool chrome{false};
+    /// It moved past the slop.
+    bool moved{false};
+    /// It was held long enough to be a long press.
+    bool held{false};
+    Drags drags{Drags::Nothing};
+    /// The id of what it drags.
+    std::string target;
+    /// Recent points and when they were reached, for the speed it is let go at.
+    std::vector<std::pair<double, Point>> trail;
+  };
   /// A change to the stack asked for while input was being handled, applied after it.
   struct Deferred {
     enum class Kind : std::uint8_t { Push, Pop, Replace, Clear };
@@ -191,6 +219,20 @@ private:
   bool pointChrome(const PointerEvent &event);
   /// The pointer moved to `at` on `entry`: hovers and focuses what it is on.
   bool moveOn(Entry &entry, Point at);
+  /// A tap or a click at `at`: the chrome's part there, else the top screen's widget.
+  bool tap(Point at);
+  /// A secondary press at `at`: the menu of what it is on.
+  bool contextAt(Point at);
+  /// `gesture` moved to `at`.
+  bool dragTo(Gesture &gesture, Point at);
+  /// Offers the drag to the widgets under its start, innermost first, then to the scroll views.
+  void startDrag(Gesture &gesture, Entry &entry, Point at);
+  /// The gesture ended at `at`.
+  bool lift(Point at);
+  /// Fires the long press of a gesture held still long enough.
+  void checkHold();
+  /// The speed the gesture moves at now, in pixels a second.
+  [[nodiscard]] Point speed() const;
   void play(const std::function<void()> &sound) const;
   void paintEntry(Canvas &canvas, const Entry &entry, bool top);
   /// The lowest screen drawn: the top one, or below it while it is an overlay or still moving.
@@ -209,11 +251,13 @@ private:
   std::function<void()> keyboard_;
   Theme theme_;
   double now_{};
+  std::optional<Gesture> gesture_;
   Rect viewport_;
   float covered_{};
   std::vector<Entry> stack_;
   /// Whether `stack_`'s first screen is the root.
   bool root_{false};
+  bool touch_{false};
   std::vector<Chrome> chrome_;
   /// Popped screens fading out, drawn over the stack.
   std::vector<Entry> leaving_;

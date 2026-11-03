@@ -39,7 +39,13 @@ enum class Action : std::uint8_t {
 
 enum class PointerKind : std::uint8_t {
   Move,
-  /// The primary button went down.
+  /// The primary button or a finger went down, starting a gesture: the navigator reads it as a
+  /// tap (`Press`) when it comes up in place, a drag once it moves past the touch slop, and a long
+  /// press (`Context`) when it is held still.
+  Down,
+  /// The primary button or the finger came up, ending the gesture.
+  Up,
+  /// A tap: down and up in place. The navigator makes one of `Down` and `Up`; an app may send one.
   Press,
   /// Wheel notches in `wheel`, positive away from the player.
   Wheel,

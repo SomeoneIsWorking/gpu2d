@@ -53,6 +53,10 @@ struct Spacing {
   float contentWidth{900.0f};
   float hintBarHeight{60.0f};
   float dialogWidth{560.0f};
+  /// The least a control a finger presses measures across.
+  float touchTarget{48.0f};
+  /// How far a press moves before it is a drag.
+  float touchSlop{8.0f};
 };
 
 struct Shape {
@@ -81,6 +85,10 @@ struct Motion {
   float scroll{110.0f};
   float focus{70.0f};
   float toast{200.0f};
+  /// How long a still press is held before it asks for the menu of what it is on.
+  float longPress{400.0f};
+  /// How long a released drag carries a scroll on at the speed it was let go.
+  float fling{250.0f};
 };
 
 struct Theme {

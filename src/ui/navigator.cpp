@@ -1,6 +1,7 @@
 #include "gpu2d/ui/navigator.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <utility>
 
@@ -18,6 +19,8 @@ constexpr float slideDp = 28.0f;
 constexpr float riseDp = 14.0f;
 /// A wheel notch scrolls this share of a row.
 constexpr float wheelRows = 1.0f;
+/// The stretch of a drag its speed is measured over, in seconds.
+constexpr double speedWindow = 0.1;
 
 /// A focusable widget with the groups around it, outermost first, and what of it can be seen.
 struct Focusable {
@@ -94,6 +97,19 @@ Widget *hitTest(Widget &widget, Point at) {
     return &widget;
   }
   return nullptr;
+}
+
+/// Every widget under `at` inside the clips above it, outermost first.
+void widgetsAt(Widget &widget, Point at, std::vector<Widget *> &out) {
+  if (const std::optional<Rect> clip = widget.clip(); clip && !contains(*clip, at)) {
+    return;
+  }
+  if (contains(widget.frame(), at)) {
+    out.push_back(&widget);
+  }
+  for (const std::unique_ptr<Widget> &child : widget.children()) {
+    widgetsAt(*child, at, out);
+  }
 }
 
 /// The innermost scroll view under `at` that can scroll.
@@ -358,15 +374,15 @@ void Navigator::paintChrome(Canvas &canvas, const Screen &chrome) {
       continue;
     }
     const ViewState &view = chrome.view();
-    Painter painter{canvas,       theme_, text_, prompts_, view.focused,
-                    view.hovered, now_,   1.0f,  viewport_};
+    Painter painter{canvas,       theme_, text_, prompts_,  view.focused,
+                    view.hovered, now_,   1.0f,  viewport_, touch_};
     entry.root->paint(painter);
   }
 }
 
 void Navigator::build(Entry &entry) {
   ViewState &view = entry.screen->view();
-  LayoutContext context{theme_, text_, view, now_};
+  LayoutContext context{theme_, text_, view, now_, touch_};
   entry.root = entry.screen->build(theme_);
   Rect room = viewport_;
   if (entry.screen->overlay()) {
@@ -471,16 +487,17 @@ void Navigator::placeHints() {
     }
   }
   for (HintBar *bar : own) {
-    bar->show(shown, theme_, text_, prompts_);
+    bar->show(shown, theme_, text_, prompts_, touch_);
   }
   for (HintBar *bar : under) {
-    bar->show(own.empty() ? shown : std::vector<Hint>{}, theme_, text_, prompts_);
+    bar->show(own.empty() ? shown : std::vector<Hint>{}, theme_, text_, prompts_, touch_);
   }
 }
 
 void Navigator::layout(const Rect &viewport, float covered) {
   viewport_ = viewport;
   covered_ = covered;
+  checkHold();
   std::erase_if(leaving_, [this](const Entry &entry) {
     return !entry.presence.moving(now_);
   });
@@ -491,7 +508,7 @@ void Navigator::layout(const Rect &viewport, float covered) {
     build(entry);
   }
   for (Chrome &chrome : chrome_) {
-    LayoutContext context{theme_, text_, chrome.screen->view(), now_};
+    LayoutContext context{theme_, text_, chrome.screen->view(), now_, touch_};
     chrome.root = chrome.screen->build(theme_);
     chrome.root->arrange(context, chrome.screen->area(viewport_, theme_));
   }
@@ -512,7 +529,7 @@ void Navigator::paintEntry(Canvas &canvas, const Entry &entry, bool top) {
   const ViewState &state = entry.screen->view();
   Painter painter{canvas,        theme_,        text_, prompts_,
                   state.focused, state.hovered, now_,  easeOut(presence),
-                  viewport_};
+                  viewport_,     touch_};
   if (overlay) {
     entry.screen->paintBackdrop(painter, viewport_);
   }
@@ -909,9 +926,38 @@ bool Navigator::moveOn(Entry &entry, Point at) {
 }
 
 bool Navigator::pointer(const PointerEvent &event) {
-  const bool overChrome =
-      event.kind != PointerKind::Leave && event.kind != PointerKind::Wheel && pointChrome(event);
-  if (event.kind == PointerKind::Move || event.kind == PointerKind::Leave || overChrome) {
+  switch (event.kind) {
+  case PointerKind::Down: {
+    Gesture gesture;
+    gesture.start = event.at;
+    gesture.last = event.at;
+    gesture.since = now_;
+    gesture.chrome = std::ranges::any_of(chrome_, [&event](const Chrome &chrome) {
+      return chrome.root != nullptr && hitTest(*chrome.root, event.at) != nullptr;
+    });
+    gesture.trail.emplace_back(now_, event.at);
+    gesture_ = std::move(gesture);
+    return true;
+  }
+  case PointerKind::Up:
+    return lift(event.at);
+  case PointerKind::Press:
+    return tap(event.at);
+  case PointerKind::Context:
+    return contextAt(event.at);
+  case PointerKind::Move:
+    if (gesture_) {
+      return dragTo(*gesture_, event.at);
+    }
+    break;
+  case PointerKind::Leave:
+    gesture_.reset();
+    break;
+  case PointerKind::Wheel:
+    break;
+  }
+  const bool overChrome = event.kind == PointerKind::Move && pointChrome(event);
+  if (event.kind != PointerKind::Wheel) {
     for (Chrome &chrome : chrome_) {
       if (!overChrome || chrome.root == nullptr || hitTest(*chrome.root, event.at) == nullptr) {
         chrome.screen->view().hovered.clear();
@@ -926,78 +972,237 @@ bool Navigator::pointer(const PointerEvent &event) {
     entry->screen->view().hovered.clear();
     return overChrome;
   }
+  if (event.kind == PointerKind::Move) {
+    return moveOn(*entry, event.at);
+  }
   Screen &screen = *entry->screen;
   ViewState &view = screen.view();
-  switch (event.kind) {
-  case PointerKind::Move:
-    return moveOn(*entry, event.at);
-  case PointerKind::Press: {
-    Widget *hit = hitTest(*entry->root, event.at);
-    if (hit == nullptr) {
-      // A press beside an overlay's card closes it, as Back would.
-      const auto children = entry->root->children();
-      if (screen.overlay() &&
-          (children.empty() || !contains(children.front()->frame(), event.at))) {
-        return act(Action::Back);
-      }
-      return false;
-    }
-    if (hit->focusable()) {
-      focusOn(*entry, hit->id(), true);
-      entry = fresh();
-      hit = hitTest(*entry->root, event.at);
-      if (hit == nullptr) {
-        return true;
-      }
-    }
-    Context context{*this, *entry->screen};
-    ++busy_;
-    const bool handled = hit->press(event.at, context);
-    --busy_;
-    if (handled && hit->focusable()) {
-      play(sounds_.activate);
-    }
-    settle(context);
+  if (ScrollView *scroll = scrollAt(*entry->root, event.at, view)) {
+    ViewState::Scroll &state = view.scroll(scroll->id());
+    const float step = theme_.px(theme_.spacing.rowHeight) * wheelRows;
+    state.offset.aim(std::clamp(state.offset.target() - event.wheel * step, 0.0f, state.limit));
+    view.focusFromPointer = true;
     return true;
   }
-  case PointerKind::Context: {
-    moveOn(*entry, event.at);
+  Widget *focused = findIn(*entry->root, view.focused);
+  if (focused == nullptr) {
+    return false;
+  }
+  Context context{*this, screen};
+  ++busy_;
+  const bool handled = focused->wheel(event.wheel, context);
+  --busy_;
+  settle(context);
+  return handled;
+}
+
+bool Navigator::tap(Point at) {
+  if (pointChrome(PointerEvent{PointerKind::Press, at, 0.0f})) {
+    if (Entry *entry = fresh()) {
+      entry->screen->view().hovered.clear();
+    }
+    return true;
+  }
+  Entry *entry = fresh();
+  if (entry == nullptr) {
+    return false;
+  }
+  Screen &screen = *entry->screen;
+  Widget *hit = hitTest(*entry->root, at);
+  if (hit == nullptr) {
+    // A press beside an overlay's card closes it, as Back would.
+    const auto children = entry->root->children();
+    if (screen.overlay() && (children.empty() || !contains(children.front()->frame(), at))) {
+      return act(Action::Back);
+    }
+    return false;
+  }
+  if (hit->focusable()) {
+    focusOn(*entry, hit->id(), true);
     entry = fresh();
-    Widget *hit = hitTest(*entry->root, event.at);
-    bool handled = false;
-    if (hit != nullptr) {
+    hit = hitTest(*entry->root, at);
+    if (hit == nullptr) {
+      return true;
+    }
+  }
+  Context context{*this, *entry->screen};
+  ++busy_;
+  const bool handled = hit->press(at, context);
+  --busy_;
+  if (handled && hit->focusable()) {
+    play(sounds_.activate);
+  }
+  settle(context);
+  return true;
+}
+
+bool Navigator::contextAt(Point at) {
+  if (pointChrome(PointerEvent{PointerKind::Context, at, 0.0f})) {
+    return true;
+  }
+  Entry *entry = fresh();
+  if (entry == nullptr) {
+    return false;
+  }
+  moveOn(*entry, at);
+  entry = fresh();
+  Widget *hit = hitTest(*entry->root, at);
+  bool handled = false;
+  if (hit != nullptr) {
+    Context context{*this, *entry->screen};
+    ++busy_;
+    handled = hit->context(at, context);
+    --busy_;
+    settle(context);
+  }
+  // Else it is the second action of what is focused now.
+  return handled || act(Action::Secondary);
+}
+
+bool Navigator::dragTo(Gesture &gesture, Point at) {
+  gesture.trail.emplace_back(now_, at);
+  std::erase_if(gesture.trail, [this](const std::pair<double, Point> &point) {
+    return point.first < now_ - speedWindow;
+  });
+  const Point by{at.x - gesture.last.x, at.y - gesture.last.y};
+  gesture.last = at;
+  if (!gesture.moved) {
+    const float dx = at.x - gesture.start.x;
+    const float dy = at.y - gesture.start.y;
+    const float slop = theme_.px(theme_.spacing.touchSlop);
+    if (dx * dx + dy * dy < slop * slop) {
+      return true;
+    }
+    gesture.moved = true;
+    // A long press that moves, and a press on the chrome, drag nothing.
+    if (!gesture.held && !gesture.chrome) {
+      if (Entry *entry = fresh()) {
+        startDrag(gesture, *entry, at);
+      }
+    }
+    return true;
+  }
+  Entry *entry = fresh();
+  if (entry == nullptr) {
+    return true;
+  }
+  ViewState &view = entry->screen->view();
+  switch (gesture.drags) {
+  case Gesture::Drags::Widget:
+    if (Widget *widget = findIn(*entry->root, gesture.target)) {
       Context context{*this, *entry->screen};
       ++busy_;
-      handled = hit->context(event.at, context);
+      widget->drag(at, by, context);
       --busy_;
       settle(context);
     }
-    // Else it is the second action of what is focused now.
-    return handled || act(Action::Secondary);
-  }
-  case PointerKind::Wheel: {
-    if (ScrollView *scroll = scrollAt(*entry->root, event.at, view)) {
-      ViewState::Scroll &state = view.scroll(scroll->id());
-      const float step = theme_.px(theme_.spacing.rowHeight) * wheelRows;
-      state.offset.aim(std::clamp(state.offset.target() - event.wheel * step, 0.0f, state.limit));
-      view.focusFromPointer = true;
-      return true;
-    }
-    Widget *focused = findIn(*entry->root, view.focused);
-    if (focused == nullptr) {
-      return false;
-    }
-    Context context{*this, screen};
-    ++busy_;
-    const bool handled = focused->wheel(event.wheel, context);
-    --busy_;
-    settle(context);
-    return handled;
-  }
-  case PointerKind::Leave:
+    break;
+  case Gesture::Drags::Scroll: {
+    ViewState::Scroll &state = view.scroll(gesture.target);
+    state.offset.snap(std::clamp(state.offset.value() - by.y, 0.0f, state.limit));
     break;
   }
-  return false;
+  case Gesture::Drags::Nothing:
+    break;
+  }
+  return true;
+}
+
+void Navigator::startDrag(Gesture &gesture, Entry &entry, Point at) {
+  ViewState &view = entry.screen->view();
+  std::vector<Widget *> under;
+  widgetsAt(*entry.root, gesture.start, under);
+  const Point whole{at.x - gesture.start.x, at.y - gesture.start.y};
+  Context context{*this, *entry.screen};
+  ++busy_;
+  for (auto widget = under.rbegin(); widget != under.rend(); ++widget) {
+    if ((*widget)->id().empty()) {
+      continue;
+    }
+    if (auto *scroll = dynamic_cast<ScrollView *>(*widget)) {
+      ViewState::Scroll &state = view.scroll(scroll->id());
+      if (state.limit > 0.0f && std::abs(whole.y) > std::abs(whole.x)) {
+        gesture.drags = Gesture::Drags::Scroll;
+        gesture.target = scroll->id();
+        state.offset.snap(std::clamp(state.offset.value() - whole.y, 0.0f, state.limit));
+        view.focusFromPointer = true;
+        break;
+      }
+      continue;
+    }
+    if ((*widget)->takesDrag(whole)) {
+      gesture.drags = Gesture::Drags::Widget;
+      gesture.target = (*widget)->id();
+      (*widget)->drag(at, whole, context);
+      break;
+    }
+  }
+  --busy_;
+  settle(context);
+}
+
+bool Navigator::lift(Point at) {
+  if (!gesture_) {
+    return false;
+  }
+  const Point velocity = speed();
+  const Gesture gesture = std::move(*gesture_);
+  gesture_.reset();
+  if (gesture.held) {
+    return true;
+  }
+  if (!gesture.moved) {
+    return tap(gesture.start);
+  }
+  Entry *entry = fresh();
+  if (entry == nullptr) {
+    return true;
+  }
+  ViewState &view = entry->screen->view();
+  switch (gesture.drags) {
+  case Gesture::Drags::Widget:
+    if (Widget *widget = findIn(*entry->root, gesture.target)) {
+      Context context{*this, *entry->screen};
+      ++busy_;
+      widget->drag(at, Point{at.x - gesture.last.x, at.y - gesture.last.y}, context);
+      widget->release(velocity, context);
+      --busy_;
+      settle(context);
+    }
+    break;
+  case Gesture::Drags::Scroll: {
+    ViewState::Scroll &state = view.scroll(gesture.target);
+    const float carried = velocity.y * theme_.motion.fling / 1000.0f;
+    state.offset.aim(std::clamp(state.offset.value() - carried, 0.0f, state.limit));
+    break;
+  }
+  case Gesture::Drags::Nothing:
+    break;
+  }
+  return true;
+}
+
+void Navigator::checkHold() {
+  if (!gesture_ || gesture_->moved || gesture_->held ||
+      now_ - gesture_->since < theme_.motion.longPress / 1000.0f) {
+    return;
+  }
+  gesture_->held = true;
+  contextAt(gesture_->start);
+}
+
+Point Navigator::speed() const {
+  if (!gesture_ || gesture_->trail.size() < 2) {
+    return Point{};
+  }
+  const auto &[from, start] = gesture_->trail.front();
+  const auto &[to, end] = gesture_->trail.back();
+  // A finger that stopped before it lifted throws nothing.
+  if (to - from <= 0.0 || now_ - to > speedWindow) {
+    return Point{};
+  }
+  const auto seconds = static_cast<float>(to - from);
+  return Point{(end.x - start.x) / seconds, (end.y - start.y) / seconds};
 }
 
 bool Navigator::text(std::string_view typed) {

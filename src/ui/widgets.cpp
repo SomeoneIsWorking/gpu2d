@@ -795,12 +795,31 @@ bool Slider::press(Point at, ActContext &context) {
     return true;
   }
   begin();
+  setAt(at, context);
+  return true;
+}
+
+bool Slider::takesDrag(Point by) const {
+  return interactive() && std::abs(by.x) > std::abs(by.y);
+}
+
+void Slider::drag(Point at, Point /*by*/, ActContext &context) {
+  if (track(context.theme()).width <= 0.0f) {
+    return;
+  }
+  if (!adjusting_) {
+    begin();
+  }
+  setAt(at, context);
+}
+
+void Slider::setAt(Point at, ActContext &context) {
+  const Rect line = track(context.theme());
   const float t = std::clamp((at.x - line.x) / line.width, 0.0f, 1.0f);
   const float span = static_cast<float>(range_.high - range_.low);
   const int steps = std::max(range_.step, 1);
   const int raw = range_.low + static_cast<int>(std::lround(t * span));
   set(range_.low + (raw - range_.low + steps / 2) / steps * steps, context);
-  return true;
 }
 
 std::vector<Hint> Slider::hints() const {
@@ -1130,31 +1149,38 @@ List::List(std::string id, float spacingDp) : ScrollView{std::move(id)} {
 // HintBar
 
 Size HintBar::measure(LayoutContext &context, float maxWidth) {
-  return Size{maxWidth, context.theme.px(context.theme.spacing.hintBarHeight)};
+  const Theme &theme = context.theme;
+  const float height = context.touch ? theme.spacing.touchTarget + 2.0f * theme.spacing.gap
+                                     : theme.spacing.hintBarHeight;
+  return Size{maxWidth, theme.px(std::max(theme.spacing.hintBarHeight, height))};
 }
 
-void HintBar::show(std::vector<Hint> hints, const Theme &theme, Typesetter &text,
-                   Prompts &prompts) {
+void HintBar::show(std::vector<Hint> hints, const Theme &theme, Typesetter &text, Prompts &prompts,
+                   bool touch) {
   placed_.clear();
+  touch_ = touch;
   const float size = theme.px(theme.type.hint);
   const float glyph = size * glyphShare;
   const float gap = theme.px(theme.spacing.gap);
-  const float between = theme.px(theme.spacing.pad * 1.5f);
+  const float between = touch ? gap * 1.5f : theme.px(theme.spacing.pad * 1.5f);
   const float pad = theme.px(theme.spacing.pad);
+  // A button's ends, past its glyph and label.
+  const float inset = touch ? theme.px(theme.spacing.pad * 0.75f) : 0.0f;
+  const float tall = touch ? theme.px(theme.spacing.touchTarget) : glyph + 2.0f * gap;
   const float centreY = frame_.y + frame_.height * 0.5f;
   std::vector<Placed> start;
   std::vector<Placed> end;
   for (Hint &hint : hints) {
     Placed placed;
-    float width = 0.0f;
+    float width = inset;
     for (const Action key : hint.keys) {
       const float wide = prompts.width(key, glyph);
       placed.glyphs.push_back(Rect{width, centreY - glyph * 0.5f, wide, glyph});
       width += wide + gap * 0.5f;
     }
     placed.labelX = width + gap * 0.5f;
-    width = placed.labelX + text.measure(hint.label, size);
-    placed.whole = Rect{0.0f, centreY - glyph * 0.5f - gap, width, glyph + 2.0f * gap};
+    width = placed.labelX + text.measure(hint.label, size) + inset;
+    placed.whole = Rect{0.0f, centreY - tall * 0.5f, std::max(width, tall), tall};
     const bool back = std::ranges::find(hint.keys, Action::Back) != hint.keys.end();
     placed.hint = std::move(hint);
     (back ? start : end).push_back(std::move(placed));
@@ -1212,14 +1238,21 @@ bool HintBar::press(Point at, ActContext &context) {
 
 void HintBar::paint(Painter &painter) const {
   const Theme &theme = painter.theme;
-  const Colour ink = painter.fade(theme.colours.inkMuted);
+  const Colour words = touch_ ? theme.colours.ink : theme.colours.inkMuted;
+  const Colour ink = painter.fade(words);
   const float centreY = frame_.y + frame_.height * 0.5f;
   for (const Placed &placed : placed_) {
+    if (touch_) {
+      painter.canvas.fillRoundRect(placed.whole, placed.whole.height * 0.5f,
+                                   painter.fade(theme.colours.control));
+      painter.canvas.strokeRoundRect(placed.whole, placed.whole.height * 0.5f,
+                                     painter.px(theme.shape.outline),
+                                     painter.fade(theme.colours.track));
+    }
     for (std::size_t i = 0; i < placed.glyphs.size(); ++i) {
       painter.prompts.draw(painter.canvas, placed.hint.keys[i], placed.glyphs[i], ink);
     }
-    painter.label(placed.hint.label, Point{placed.labelX, centreY}, theme.type.hint,
-                  theme.colours.inkMuted);
+    painter.label(placed.hint.label, Point{placed.labelX, centreY}, theme.type.hint, words);
   }
 }
 
