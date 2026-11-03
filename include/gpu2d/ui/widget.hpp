@@ -76,6 +76,10 @@ public:
   std::string editing;
   /// That field's caret, a byte offset clamped to its text when laid out.
   std::size_t caret{};
+  /// The id of the slider being adjusted, which then takes Left and Right; empty for none.
+  std::string adjusting;
+  /// Its level when adjusting began, which Back puts back.
+  int adjustingFrom{};
 
 private:
   std::map<std::string, Scroll, std::less<>> scrolls_;

@@ -18,6 +18,9 @@ constexpr float trackWidthDp = 200.0f;
 constexpr float trackHeightDp = 6.0f;
 constexpr float knobDp = 22.0f;
 constexpr float numberWidthDp = 56.0f;
+/// The ring round a held slider's knob: how far it reaches past the knob, in dp, and how strong.
+constexpr float haloDp = 6.0f;
+constexpr float haloAlpha = 0.35f;
 /// A chevron's half height and its stroke, in dp.
 constexpr float chevronDp = 6.0f;
 constexpr float strokeDp = 2.2f;
@@ -723,24 +726,75 @@ void Slider::set(int level, ActContext &context) {
   }
 }
 
+void Slider::arrange(LayoutContext &context, const Rect &frame) {
+  Item::arrange(context, frame);
+  state_ = &context.state;
+  adjusting_ = !id().empty() && context.state.adjusting == id() && context.state.focused == id();
+}
+
+void Slider::begin() {
+  if (adjusting_ || state_ == nullptr) {
+    return;
+  }
+  adjusting_ = true;
+  state_->adjusting = id();
+  state_->adjustingFrom = level_;
+}
+
+void Slider::end() {
+  adjusting_ = false;
+  if (state_ != nullptr) {
+    state_->adjusting.clear();
+  }
+}
+
 bool Slider::act(Action action, ActContext &context) {
   if (!interactive()) {
     return false;
   }
-  if (action == Action::Left || action == Action::Right) {
+  switch (action) {
+  case Action::Accept:
+    if (adjusting_) {
+      end();
+    } else {
+      begin();
+    }
+    return true;
+  case Action::Back:
+    if (!adjusting_) {
+      return false;
+    }
+    set(state_ != nullptr ? state_->adjustingFrom : level_, context);
+    end();
+    context.sound(Sound::Back);
+    return true;
+  case Action::Left:
+  case Action::Right:
+    if (!adjusting_) {
+      return false;
+    }
     set(level_ + (action == Action::Left ? -range_.step : range_.step), context);
     return true;
+  default:
+    return actExtra(action);
   }
-  return actExtra(action);
 }
 
 bool Slider::press(Point at, ActContext &context) {
-  const Rect line = track(context.theme());
-  const float slack = context.theme().px(knobDp);
-  if (!interactive() || line.width <= 0.0f || at.x < line.x - slack ||
-      at.x > line.right() + slack) {
+  if (!interactive()) {
     return false;
   }
+  const Rect line = track(context.theme());
+  const float slack = context.theme().px(knobDp);
+  if (line.width <= 0.0f || at.x < line.x - slack || at.x > line.right() + slack) {
+    if (adjusting_) {
+      end();
+    } else {
+      begin();
+    }
+    return true;
+  }
+  begin();
   const float t = std::clamp((at.x - line.x) / line.width, 0.0f, 1.0f);
   const float span = static_cast<float>(range_.high - range_.low);
   const int steps = std::max(range_.step, 1);
@@ -750,7 +804,11 @@ bool Slider::press(Point at, ActContext &context) {
 }
 
 std::vector<Hint> Slider::hints() const {
-  std::vector<Hint> hints{Hint{{Action::Left, Action::Right}, "Adjust"}};
+  if (adjusting_) {
+    return {Hint{{Action::Left, Action::Right}, "Adjust"}, Hint{{Action::Accept}, "Done"},
+            Hint{{Action::Back}, "Cancel"}};
+  }
+  std::vector<Hint> hints{Hint{{Action::Accept}, "Adjust"}};
   addExtraHints(hints);
   return hints;
 }
@@ -765,11 +823,16 @@ void Slider::paintTrailing(Painter &painter, const Rect &area) const {
                                line.height * 0.5f, painter.fade(theme.colours.accent));
   const Point knob{line.x + line.width * t, line.y + line.height * 0.5f};
   const float radius = painter.px(knobDp) * 0.5f;
+  if (adjusting_) {
+    // Held: a halo round the knob and the number in the accent.
+    painter.canvas.fillCircle(knob, radius + painter.px(haloDp),
+                              painter.fade(faded(theme.colours.accent, haloAlpha)));
+  }
   painter.canvas.fillCircle(knob, radius, painter.fade(theme.colours.accent));
   painter.canvas.fillCircle(knob, radius - painter.px(3.0f), painter.fade(theme.colours.onAccent));
   painter.labelEndingAt(std::to_string(level_) + unit_,
                         Point{area.right(), area.y + area.height * 0.5f}, theme.type.value,
-                        theme.colours.ink);
+                        adjusting_ ? theme.colours.accent : theme.colours.ink);
 }
 
 // CardButton

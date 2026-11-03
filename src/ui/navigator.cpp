@@ -404,6 +404,9 @@ void Navigator::build(Entry &entry) {
   if (view.editing != view.focused) {
     view.editing.clear();
   }
+  if (view.adjusting != view.focused) {
+    view.adjusting.clear();
+  }
   if (editLater_ && !stack_.empty() && &entry == &stack_.back()) {
     applyEdit(entry, *editLater_);
     editLater_.reset();

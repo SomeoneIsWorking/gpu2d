@@ -245,16 +245,50 @@ void choicePressesStepOrOpen() {
   expect(f.rig.navigator.top() == f.board, "a press beside the list closes it");
 }
 
-void sliderStepsAndTakesPresses() {
+void sliderAdjustsOnlyWhileHeld() {
   Fixture f;
   f.rig.navigator.focus("slider");
   f.rig.navigator.act(Action::Right);
-  expect(f.board->level == 55, "Right steps by the slider's step");
+  expect(f.board->level == 50, "Right leaves a slider that is not being adjusted alone");
+  f.rig.navigator.focus("slider");
+  f.rig.navigator.act(Action::Left);
+  expect(f.board->level == 50, "and Left too");
+  f.rig.navigator.focus("slider");
+  expect(f.rig.navigator.hints().front().label == "Adjust", "its prompt says A adjusts it");
+  f.rig.navigator.act(Action::Accept);
+  f.rig.frame();
+  const auto adjusting = [&f] {
+    const auto *slider = dynamic_cast<const ui::Slider *>(f.rig.navigator.find("slider"));
+    return slider != nullptr && slider->adjusting();
+  };
+  expect(adjusting(), "A starts adjusting it");
+  expect(f.rig.navigator.hints().back().label == "Cancel", "while held, Back is its Cancel");
+  f.rig.navigator.act(Action::Right);
+  expect(f.board->level == 55, "Right then steps by the slider's step");
   for (int i = 0; i < 20; ++i) {
     f.rig.navigator.act(Action::Left);
   }
   expect(f.board->level == 0, "it stops at its low end");
   expect(f.rig.navigator.focused() == "slider", "Left at the end does not leave it");
+  f.rig.navigator.act(Action::Back);
+  f.rig.frame();
+  expect(f.board->level == 50 && f.rig.navigator.top() == f.board && !adjusting(),
+         "Back puts back the level adjusting began with and closes nothing");
+  f.rig.navigator.act(Action::Accept);
+  f.rig.navigator.act(Action::Right);
+  f.rig.navigator.act(Action::Accept);
+  f.rig.frame();
+  expect(f.board->level == 55 && !adjusting(), "A keeps the level and ends adjusting");
+  f.rig.navigator.act(Action::Accept);
+  f.rig.navigator.act(Action::Down);
+  f.rig.frame();
+  expect(f.rig.navigator.focused() == "open" && !adjusting(),
+         "Down still leaves it, which ends adjusting");
+}
+
+void sliderTakesPresses() {
+  Fixture f;
+  f.rig.navigator.focus("slider");
   const Rect row = f.rig.navigator.find("slider")->frame();
   const ui::Theme &theme = f.rig.navigator.theme();
   // The track is the end of the row less the number's room and half a knob each side.
@@ -262,6 +296,14 @@ void sliderStepsAndTakesPresses() {
   f.rig.navigator.pointer(
       ui::PointerEvent{ui::PointerKind::Press, Point{end, row.y + row.height * 0.5f}, 0.0f});
   expect(f.board->level == 100, "a press at the track's end sets the top level");
+  f.rig.navigator.act(Action::Left);
+  expect(f.board->level == 95, "and holds it for Left and Right");
+  f.rig.navigator.act(Action::Back);
+  expect(f.board->level == 50, "Back puts back the level from before the press");
+  f.rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press,
+                                           Point{row.x + 8.0f, row.y + row.height * 0.5f}, 0.0f});
+  f.rig.navigator.act(Action::Right);
+  expect(f.board->level == 55, "a press on the row beside the track holds it too");
 }
 
 void buttonAndHintBarPress() {
@@ -582,7 +624,8 @@ int main() {
   toggleFlipsOnA();
   choiceStepsAndOpensAList();
   choicePressesStepOrOpen();
-  sliderStepsAndTakesPresses();
+  sliderAdjustsOnlyWhileHeld();
+  sliderTakesPresses();
   buttonAndHintBarPress();
   rowActionsAndChip();
   confirmFirstAsks();

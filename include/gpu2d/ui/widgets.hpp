@@ -9,7 +9,9 @@
 //   Submit is done; A asks the app's on-screen keyboard to type into it.
 // - Toggle: A flips it.
 // - Choice: Left and Right step through its options; A opens them as a list.
-// - Slider: Left and Right step it; a press on the track sets it.
+// - Slider: focused, it is a row like any other, Left and Right moving the focus; A or a press on
+//   the row starts adjusting it, Left and Right then step it, A ends that keeping the level and
+//   Back ends it putting back the level it began with; a press on the track sets it and adjusts.
 // - Tabs: LB and RB step them from anywhere on the screen; focusing a tab chooses it.
 // - HintBar: the prompts for the focused widget and the screen, never written by hand.
 #pragma once
@@ -385,11 +387,16 @@ public:
   [[nodiscard]] bool focusable() const override {
     return interactive();
   }
+  void arrange(LayoutContext &context, const Rect &frame) override;
   bool act(Action action, ActContext &context) override;
   bool press(Point at, ActContext &context) override;
   [[nodiscard]] std::vector<Hint> hints() const override;
   [[nodiscard]] int level() const noexcept {
     return level_;
+  }
+  /// Whether it is being adjusted: Left and Right step it rather than move the focus.
+  [[nodiscard]] bool adjusting() const noexcept {
+    return adjusting_;
   }
 
 protected:
@@ -400,11 +407,18 @@ private:
   /// The track inside the end's area, laid out.
   [[nodiscard]] Rect track(const Theme &theme) const noexcept;
   void set(int level, ActContext &context);
+  /// Starts adjusting, remembering the level Back puts back.
+  void begin();
+  /// Stops adjusting, keeping the level.
+  void end();
 
   Range range_;
   int level_;
   std::function<void(int)> changed_;
   std::string unit_;
+  /// The screen's state as last laid out, which holds whether it is being adjusted.
+  ViewState *state_{nullptr};
+  bool adjusting_{false};
 };
 
 enum class Orientation : std::uint8_t { Horizontal, Vertical };
