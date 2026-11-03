@@ -540,7 +540,8 @@ public:
   bool press(Point at, ActContext &context) override;
   void paint(Painter &painter) const override;
 
-  /// Lays `hints` out across the bar; with `touch` each is a button a finger presses.
+  /// Lays `hints` out across the bar; with `touch` each is a button a finger presses, a stepping
+  /// pair (Left and Right, the tabs) a chevron each side whose nearer one a tap does.
   void show(std::vector<Hint> hints, const Theme &theme, Typesetter &text, Prompts &prompts,
             bool touch);
   /// The prompts it shows, in order.
@@ -553,6 +554,8 @@ private:
     std::vector<Rect> glyphs;
     float labelX{};
     Rect whole;
+    /// A stepping pair drawn as chevrons before and after the label.
+    bool arrows{false};
   };
   std::vector<Placed> placed_;
   bool touch_{false};

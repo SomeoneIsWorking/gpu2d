@@ -435,10 +435,11 @@ void Item::arrange(LayoutContext &context, const Rect &frame) {
   frame_ = frame;
   const Theme &theme = context.theme;
   const float pad = theme.px(theme.spacing.pad);
-  const float end = trailingWidth(context, frame.width - 2.0f * pad);
+  const float inner = frame.width - 2.0f * pad;
+  const float end = trailingWidth(context, inner);
+  const float endGap = end > 0.0f ? theme.px(theme.spacing.pad) : 0.0f;
   trailing_ = Rect{frame.right() - pad - end, frame.y, end, frame.height};
-  float room = std::max(0.0f, frame.width - 2.0f * pad - end -
-                                  (end > 0.0f ? theme.px(theme.spacing.pad) : 0.0f));
+  float room = std::max(0.0f, inner - end - endGap);
   chipBox_ = Rect{};
   chipShown_.clear();
   if (!chip_.empty()) {
@@ -453,7 +454,11 @@ void Item::arrange(LayoutContext &context, const Rect &frame) {
     chipBox_ = Rect{right - width, frame.y + (frame.height - height) * 0.5f, width, height};
     room = std::max(0.0f, room - width - theme.px(theme.spacing.gap * 2.0f));
   }
-  titleShown_ = fitted(context.text, text_.title, room, theme.px(theme.type.body));
+  // Compared as the sum an end sized from the title was, so float rounding never cuts that title.
+  const float title = context.text.measure(text_.title, theme.px(theme.type.body));
+  titleShown_ = chip_.empty() && inner - title - endGap >= end
+                    ? text_.title
+                    : fitted(context.text, text_.title, room, theme.px(theme.type.body));
   subtitleShown_ = fitted(context.text, text_.subtitle, room, theme.px(theme.type.caption));
   valueShown_ = fittedBeside(context.text, value_, end, opens_ ? chevronZone(theme) : 0.0f,
                              theme.px(theme.type.value));
@@ -1144,6 +1149,16 @@ List::List(std::string id, float spacingDp) : ScrollView{std::move(id)} {
 
 // HintBar
 
+namespace {
+
+/// Whether `keys` step one way then the other: Left and Right, or the previous and next tab.
+bool stepsPair(const std::vector<Action> &keys) {
+  return keys.size() == 2 && ((keys[0] == Action::Left && keys[1] == Action::Right) ||
+                              (keys[0] == Action::PreviousTab && keys[1] == Action::NextTab));
+}
+
+} // namespace
+
 Size HintBar::measure(LayoutContext &context, float maxWidth) {
   const Theme &theme = context.theme;
   const float height = context.touch ? theme.spacing.touchTarget + 2.0f * theme.spacing.gap
@@ -1168,14 +1183,24 @@ void HintBar::show(std::vector<Hint> hints, const Theme &theme, Typesetter &text
   std::vector<Placed> end;
   for (Hint &hint : hints) {
     Placed placed;
+    // A finger steps a pair with the chevrons either side of the label, not the pad's buttons.
+    placed.arrows = touch && stepsPair(hint.keys);
     float width = inset;
     for (const Action key : hint.keys) {
-      const float wide = prompts.width(key, glyph);
+      if (placed.arrows && key == hint.keys.back()) {
+        break;
+      }
+      const float wide = placed.arrows ? glyph : prompts.width(key, glyph);
       placed.glyphs.push_back(Rect{width, centreY - glyph * 0.5f, wide, glyph});
       width += wide + gap * 0.5f;
     }
     placed.labelX = width + gap * 0.5f;
-    width = placed.labelX + text.measure(hint.label, size) + inset;
+    width = placed.labelX + text.measure(hint.label, size);
+    if (placed.arrows) {
+      placed.glyphs.push_back(Rect{width + gap * 0.5f, centreY - glyph * 0.5f, glyph, glyph});
+      width += gap * 0.5f + glyph;
+    }
+    width += inset;
     placed.whole = Rect{0.0f, centreY - tall * 0.5f, std::max(width, tall), tall};
     const bool back = std::ranges::find(hint.keys, Action::Back) != hint.keys.end();
     placed.hint = std::move(hint);
@@ -1224,10 +1249,21 @@ std::vector<Hint> HintBar::shown() const {
 
 bool HintBar::press(Point at, ActContext &context) {
   for (const Placed &placed : placed_) {
-    if (contains(placed.whole, at) && !placed.hint.keys.empty()) {
-      context.perform(placed.hint.keys.front());
-      return true;
+    if (!contains(placed.whole, at) || placed.hint.keys.empty()) {
+      continue;
     }
+    // The key whose glyph is nearest the tap: either chevron of a pair.
+    const auto away = [&at](const Rect &box) {
+      return std::abs(box.x + box.width * 0.5f - at.x);
+    };
+    std::size_t nearest = 0;
+    for (std::size_t i = 1; i < placed.glyphs.size(); ++i) {
+      if (away(placed.glyphs[i]) < away(placed.glyphs[nearest])) {
+        nearest = i;
+      }
+    }
+    context.perform(placed.hint.keys[std::min(nearest, placed.hint.keys.size() - 1)]);
+    return true;
   }
   return false;
 }
@@ -1246,7 +1282,14 @@ void HintBar::paint(Painter &painter) const {
                                      painter.fade(theme.colours.track));
     }
     for (std::size_t i = 0; i < placed.glyphs.size(); ++i) {
-      painter.prompts.draw(painter.canvas, placed.hint.keys[i], placed.glyphs[i], ink);
+      const Rect &box = placed.glyphs[i];
+      if (placed.arrows) {
+        const float sign = i == 0 ? -1.0f : 1.0f;
+        chevron(painter, box.x + box.width * 0.5f + sign * painter.px(chevronDp) * 0.5f, centreY,
+                sign, words);
+      } else {
+        painter.prompts.draw(painter.canvas, placed.hint.keys[i], box, ink);
+      }
     }
     painter.label(placed.hint.label, Point{placed.labelX, centreY}, theme.type.hint, words);
   }
