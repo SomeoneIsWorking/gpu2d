@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <exception>
+#include <string>
+#include <system_error>
 #include <utility>
 
 #include "gpu2d/image/decode.hpp"
@@ -55,16 +57,18 @@ ImageLoader::Handle ImageLoader::load(ImageRequest request) {
 
 ImageLoader::Handle ImageLoader::loadFile(const std::filesystem::path &file, Filter filter,
                                           int maxSide) {
-  return load(
-      ImageRequest{.key = file.string() + '\x1f' + std::to_string(maxSide),
-                   .decode = [file, maxSide](std::string &error) -> std::optional<image::Bitmap> {
-                     std::optional<image::Bitmap> pixels = image::decodeFile(file, error);
-                     if (pixels && maxSide > 0) {
-                       return image::fittedWithin(std::move(*pixels), maxSide);
-                     }
-                     return pixels;
-                   },
-                   .filter = filter});
+  std::error_code ec;
+  const auto written = std::filesystem::last_write_time(file, ec).time_since_epoch().count();
+  return load(ImageRequest{
+      .key = file.string() + '\x1f' + std::to_string(maxSide) + '\x1f' + std::to_string(written),
+      .decode = [file, maxSide](std::string &error) -> std::optional<image::Bitmap> {
+        std::optional<image::Bitmap> pixels = image::decodeFile(file, error);
+        if (pixels && maxSide > 0) {
+          return image::fittedWithin(std::move(*pixels), maxSide);
+        }
+        return pixels;
+      },
+      .filter = filter});
 }
 
 void ImageLoader::run(const std::stop_token &stop) {

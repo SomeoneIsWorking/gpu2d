@@ -10,7 +10,7 @@ never stalls a frame on decoding or on a run of uploads. `include/gpu2d/image_lo
 | Concept | Where | Notes |
 |---|---|---|
 | Requests | `ImageLoader::load(ImageRequest)` | A key, a decode function run on a worker (`ImageDecode`: pixels, or nothing with a reason, or a throw) and the texture's `Filter` |
-| Files | `ImageLoader::loadFile(path, filter, maxSide)` | SDL3_image's decode (`image::decodeFile`), scaled to fit `maxSide` (`image::fittedWithin`) when positive |
+| Files | `ImageLoader::loadFile(path, filter, maxSide)` | SDL3_image's decode (`image::decodeFile`), scaled to fit `maxSide` (`image::fittedWithin`) when positive; the key holds the path, `maxSide` and the file's write time, so a file written again is a new image while handles of the old one keep theirs |
 | Handles | `ImageLoader::Handle` (`ImageHandle`) | `state()` (`Empty`, `Pending`, `Ready`, `Failed`), `texture()` (null until it lands), `error()`; copies share the image |
 | Workers | `ImageLoader(workers)` | Two by default; they take the queue oldest first |
 | Landing | `upload(device, bytes)` | On the render thread once a frame: textures for decoded images, oldest first, until `bytes` of pixels went up (at least one image), and the failures since the last call |

@@ -119,7 +119,8 @@ public:
 
   /// Queues `request` unless a handle already holds the same image, which it shares.
   [[nodiscard]] Handle load(ImageRequest request);
-  /// The image in `file` through SDL3_image, scaled down to fit within `maxSide` when positive.
+  /// The image in `file` through SDL3_image, scaled down to fit within `maxSide` when positive;
+  /// keyed by the file's write time too, so a file written again is decoded again.
   [[nodiscard]] Handle loadFile(const std::filesystem::path &file, Filter filter, int maxSide = 0);
 
   /// On the render thread, once a frame: makes textures of decoded images, oldest first, until

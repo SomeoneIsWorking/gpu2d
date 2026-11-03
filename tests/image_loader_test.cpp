@@ -2,6 +2,7 @@
 // once a frame uploads it, the same image is decoded once, a dropped handle cancels its decode,
 // a failure is reported with its reason, and a frame uploads no more than its budget.
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -82,6 +83,24 @@ void scalesDownToMaxSide(gpu2d::test::GpuFixture &gpu, const std::filesystem::pa
   expect(handle.texture() != nullptr && handle.texture()->width() == 20 &&
              handle.texture()->height() == 40,
          "a file larger than the limit is scaled to fit, keeping its aspect");
+}
+
+void decodesAFileWrittenAgain(gpu2d::test::GpuFixture &gpu, const std::filesystem::path &dir) {
+  const std::filesystem::path file = writePng(dir, "again.png", solid({8, 8}, {9, 9, 9, 255}));
+  ImageLoader loader;
+  const ImageHandle before = loader.loadFile(file, Filter::Linear);
+  loader.waitAll();
+  static_cast<void>(loader.upload(gpu.device(), everything));
+  writePng(dir, "again.png", solid({4, 4}, {9, 9, 9, 255}));
+  std::filesystem::last_write_time(file, std::filesystem::last_write_time(file) +
+                                             std::chrono::seconds{1});
+  const ImageHandle after = loader.loadFile(file, Filter::Linear);
+  loader.waitAll();
+  static_cast<void>(loader.upload(gpu.device(), everything));
+  expect(before.texture() != nullptr && before.texture()->width() == 8,
+         "a handle keeps the image it was given");
+  expect(after.texture() != nullptr && after.texture()->width() == 4,
+         "a file written again is decoded again");
 }
 
 void sharesOneDecode(gpu2d::test::GpuFixture &gpu) {
@@ -202,6 +221,7 @@ int main() {
   gpu2d::test::GpuFixture gpu;
   landsOnUploadAndDraws(gpu, dir.path());
   scalesDownToMaxSide(gpu, dir.path());
+  decodesAFileWrittenAgain(gpu, dir.path());
   sharesOneDecode(gpu);
   droppedHandleCancels(gpu);
   reportsFailures(gpu, dir.path());
