@@ -804,13 +804,9 @@ bool Slider::takesDrag(Point by) const {
 }
 
 void Slider::drag(Point at, Point /*by*/, ActContext &context) {
-  if (track(context.theme()).width <= 0.0f) {
-    return;
+  if (track(context.theme()).width > 0.0f) {
+    setAt(at, context);
   }
-  if (!adjusting_) {
-    begin();
-  }
-  setAt(at, context);
 }
 
 void Slider::setAt(Point at, ActContext &context) {
