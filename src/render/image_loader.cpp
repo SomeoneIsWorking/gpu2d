@@ -1,6 +1,7 @@
 #include "gpu2d/image_loader.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <string>
 #include <system_error>
@@ -58,7 +59,10 @@ ImageLoader::Handle ImageLoader::load(ImageRequest request) {
 ImageLoader::Handle ImageLoader::loadFile(const std::filesystem::path &file, Filter filter,
                                           int maxSide) {
   std::error_code ec;
-  const auto written = std::filesystem::last_write_time(file, ec).time_since_epoch().count();
+  // In nanoseconds: libc++ counts file time in a 128-bit integer `to_string` cannot take.
+  const auto written = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                           std::filesystem::last_write_time(file, ec).time_since_epoch())
+                           .count();
   return load(ImageRequest{
       .key = file.string() + '\x1f' + std::to_string(maxSide) + '\x1f' + std::to_string(written),
       .decode = [file, maxSide](std::string &error) -> std::optional<image::Bitmap> {
