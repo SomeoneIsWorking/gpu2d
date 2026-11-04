@@ -32,14 +32,16 @@ std::unique_ptr<Widget> Dialog::build(const Theme &theme) {
   auto root = std::make_unique<Centre>(spacing.dialogWidth);
   root->pad(Insets::all(spacing.pad));
   auto &card = root->add<Card>();
-  card.pad(Insets::symmetric(spacing.pad * 1.5f, spacing.pad * 1.4f)).space(spacing.pad);
+  const Insets cardPad = Insets::symmetric(spacing.pad * 1.5f, spacing.pad * 1.4f);
+  card.pad(cardPad).space(spacing.pad);
   card.add<Label>(title(), TextRole::Title, true);
   if (!body_.empty()) {
     card.add<Label>(body_, TextRole::Body, true);
   }
-  auto &buttons = card.add<Row>();
+  auto &buttons = card.add<ButtonRow>();
   buttons.space(spacing.gap * 2.0f);
-  buttons.add<Spacer>();
+  // As wide as the buttons beside each other need, up to the screen less its padding.
+  root->widenFor(buttons, cardPad.left + cardPad.right);
   for (std::size_t i = 0; i < choices_.size(); ++i) {
     const Choice &choice = choices_[i];
     buttons.add<Button>(

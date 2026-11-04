@@ -75,6 +75,19 @@ private:
   Align align_{Align::Centre};
 };
 
+/// Buttons at their own widths at the row's end, or one under another across its width when they
+/// do not all fit beside each other.
+class ButtonRow : public Container {
+public:
+  using Container::Container;
+  [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
+  void arrange(LayoutContext &context, const Rect &frame) override;
+
+private:
+  /// Each button's own width.
+  [[nodiscard]] std::vector<float> widths(LayoutContext &context) const;
+};
+
 class Stack : public Container {
 public:
   using Container::Container;
@@ -115,17 +128,28 @@ public:
   void paint(Painter &painter) const override;
 };
 
-/// One child at the size it measures (no wider than `maxWidthDp`), centred in its frame; a child
-/// that grows takes the frame's whole height.
+/// One child `maxWidthDp` wide, centred in its frame; a child that grows takes the frame's whole
+/// height. Widened for a descendant (`widenFor`), it is as wide as that one measures with room to
+/// spare, plus `extraDp`, when that is wider; never wider than its frame.
 class Centre : public Container {
 public:
   explicit Centre(float maxWidthDp) : maxWidth_{maxWidthDp} {
+  }
+  Centre &widenFor(Widget &content, float extraDp) noexcept {
+    widenedFor_ = &content;
+    widenedBy_ = extraDp;
+    return *this;
   }
   [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
   void arrange(LayoutContext &context, const Rect &frame) override;
 
 private:
+  /// The child's width in `room` pixels.
+  [[nodiscard]] float childWidth(LayoutContext &context, float room);
+
   float maxWidth_;
+  Widget *widenedFor_{nullptr};
+  float widenedBy_{0.0f};
 };
 
 /// Room that grows; nothing drawn.

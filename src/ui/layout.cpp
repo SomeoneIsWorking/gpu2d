@@ -1,6 +1,7 @@
 #include "gpu2d/ui/layout.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 
 namespace gpu2d::ui {
@@ -154,6 +155,54 @@ void Row::arrange(LayoutContext &context, const Rect &frame) {
   }
 }
 
+std::vector<float> ButtonRow::widths(LayoutContext &context) const {
+  std::vector<float> widths;
+  widths.reserve(children_.size());
+  for (const std::unique_ptr<Widget> &child : children_) {
+    widths.push_back(child->measure(context, std::numeric_limits<float>::max()).width);
+  }
+  return widths;
+}
+
+Size ButtonRow::measure(LayoutContext &context, float maxWidth) {
+  const Theme &theme = context.theme;
+  const float width = std::max(0.0f, maxWidth - padX(theme));
+  const std::vector<float> sizes = widths(context);
+  const float total = std::accumulate(sizes.begin(), sizes.end(), gaps(theme));
+  const bool beside = total <= width;
+  float height = beside ? 0.0f : gaps(theme);
+  for (const std::unique_ptr<Widget> &child : children_) {
+    const float childHeight = heightOf(context, *child, width);
+    height = beside ? std::max(height, childHeight) : height + childHeight;
+  }
+  return Size{std::min(maxWidth, total + padX(theme)), height + padY(theme)};
+}
+
+void ButtonRow::arrange(LayoutContext &context, const Rect &frame) {
+  frame_ = frame;
+  const Theme &theme = context.theme;
+  const Rect area = inner(theme, frame);
+  const std::vector<float> sizes = widths(context);
+  const float total = std::accumulate(sizes.begin(), sizes.end(), gaps(theme));
+  const float gap = theme.px(spacing_);
+  if (total <= area.width) {
+    float x = area.x + area.width - total;
+    for (std::size_t i = 0; i < children_.size(); ++i) {
+      Widget &child = *children_[i];
+      const float height = std::min(area.height, heightOf(context, child, sizes[i]));
+      child.arrange(context, Rect{x, area.y + (area.height - height) * 0.5f, sizes[i], height});
+      x += sizes[i] + gap;
+    }
+    return;
+  }
+  float y = area.y;
+  for (const std::unique_ptr<Widget> &child : children_) {
+    const float height = heightOf(context, *child, area.width);
+    child->arrange(context, Rect{area.x, y, area.width, height});
+    y += height + gap;
+  }
+}
+
 Size Stack::measure(LayoutContext &context, float maxWidth) {
   const Theme &theme = context.theme;
   const float width = std::max(0.0f, maxWidth - padX(theme));
@@ -233,9 +282,18 @@ void Backdrop::paint(Painter &painter) const {
   paintChildren(painter);
 }
 
+float Centre::childWidth(LayoutContext &context, float room) {
+  float width = context.theme.px(maxWidth_);
+  if (widenedFor_ != nullptr) {
+    width = std::max(width, widenedFor_->measure(context, std::numeric_limits<float>::max()).width +
+                                context.theme.px(widenedBy_));
+  }
+  return std::max(0.0f, std::min(room, width));
+}
+
 Size Centre::measure(LayoutContext &context, float maxWidth) {
   const Theme &theme = context.theme;
-  const float width = std::min(maxWidth - padX(theme), theme.px(maxWidth_));
+  const float width = childWidth(context, maxWidth - padX(theme));
   Size size;
   for (const std::unique_ptr<Widget> &child : children_) {
     const Size measured = child->measure(context, width);
@@ -249,7 +307,7 @@ void Centre::arrange(LayoutContext &context, const Rect &frame) {
   frame_ = frame;
   const Theme &theme = context.theme;
   const Rect area = inner(theme, frame);
-  const float width = std::min(area.width, theme.px(maxWidth_));
+  const float width = childWidth(context, area.width);
   for (const std::unique_ptr<Widget> &child : children_) {
     const float height = child->growth() > 0.0f
                              ? area.height
