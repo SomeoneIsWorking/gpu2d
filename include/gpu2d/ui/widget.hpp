@@ -118,6 +118,8 @@ public:
   virtual void focus(std::string id) = 0;
   /// Asks the app's on-screen keyboard to type into the focused field (`Navigator::setKeyboard`).
   virtual void openKeyboard() = 0;
+  /// The clipboard's text (`Navigator::setClipboard`); empty when it holds none.
+  [[nodiscard]] virtual std::string clipboard() const = 0;
   [[nodiscard]] virtual double now() const = 0;
   [[nodiscard]] virtual const Theme &theme() const = 0;
 };
@@ -249,6 +251,10 @@ public:
   virtual void hover(Point /*at*/, ActContext & /*context*/) {
   }
   /// Wheel notches while focused with no scroll view under the pointer; true when taken.
+  /// Takes the clipboard's `text`; true when it did.
+  virtual bool paste(std::string_view /*text*/, ActContext & /*context*/) {
+    return false;
+  }
   virtual bool wheel(float /*notches*/, ActContext & /*context*/) {
     return false;
   }

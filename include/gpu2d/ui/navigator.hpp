@@ -58,6 +58,10 @@ public:
   void setKeyboard(std::function<void()> open) {
     keyboard_ = std::move(open);
   }
+  /// Where pasted text comes from: the app reads its system's clipboard.
+  void setClipboard(std::function<std::string()> read) {
+    clipboard_ = std::move(read);
+  }
   /// The clock, in seconds; set before laying out each frame.
   void setTime(double now) noexcept {
     now_ = now;
@@ -132,6 +136,9 @@ public:
   bool pointer(const PointerEvent &event);
   /// Typed text for the focused widget, else the top screen; true when something took it.
   bool text(std::string_view typed);
+  /// The clipboard's text for the focused widget, else the top screen; true when something took
+  /// it.
+  bool paste();
   /// Whether the top screen's focused widget takes typed text, as last laid out.
   [[nodiscard]] bool typing() const;
   /// Whether that widget is being edited: typed into, or opened with A, since it took the focus.
@@ -249,6 +256,7 @@ private:
   Prompts &prompts_;
   Sounds sounds_;
   std::function<void()> keyboard_;
+  std::function<std::string()> clipboard_;
   Theme theme_;
   double now_{};
   std::optional<Gesture> gesture_;

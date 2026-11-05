@@ -471,6 +471,91 @@ void textFieldsTakeTypedText() {
          "nothing takes text off a field");
 }
 
+/// A form with one field whose owner takes a paste whole.
+class WholePaste final : public ui::Screen {
+public:
+  WholePaste() : Screen{"whole", "Whole"} {
+  }
+  [[nodiscard]] std::unique_ptr<ui::Widget> build(const ui::Theme & /*theme*/) override {
+    auto root = std::make_unique<ui::Column>();
+    root->add<ui::TextField>("path", "Path", text,
+                             [this](std::string typed) {
+                               text = std::move(typed);
+                             })
+        .onPaste([this](std::string pasted) {
+          text = "whole:" + pasted;
+        });
+    root->add<ui::Button>("ok", "OK", [] {
+    });
+    return root;
+  }
+  bool paste(std::string_view pasted, ui::ActContext & /*context*/) override {
+    fellThrough = std::string{pasted};
+    return true;
+  }
+  std::string text{"before"};
+  std::string fellThrough;
+};
+
+void pasteGoesIntoTheFocusedField() {
+  test::Rig rig;
+  std::string clipboard;
+  rig.navigator.setClipboard([&clipboard] {
+    return clipboard;
+  });
+  auto opened = std::make_unique<Form>();
+  Form *form = opened.get();
+  rig.navigator.push(std::move(opened));
+  rig.frame();
+
+  expect(!rig.navigator.paste(), "nothing to paste is taken by nothing");
+  clipboard = "  abc\r\n";
+  expect(rig.navigator.paste() && form->name == "abc" && rig.navigator.editing(),
+         "a paste loses its surrounding space and line end, and starts editing");
+  rig.frame();
+  clipboard = "de\nsecond line";
+  rig.navigator.paste();
+  rig.frame();
+  expect(form->name == "abcde", "a paste goes in at the caret, its first line alone");
+  clipboard = "toolong";
+  rig.navigator.paste();
+  rig.frame();
+  expect(form->name == "abcde", "a paste past the limit is refused whole");
+  clipboard = " \n\t";
+  expect(!rig.navigator.paste() && form->name == "abcde", "only space pastes nothing");
+
+  rig.navigator.act(Action::Down);
+  rig.frame();
+  clipboard = "s3cret\n";
+  rig.navigator.paste();
+  const auto *secret = dynamic_cast<const ui::TextField *>(rig.navigator.find("password"));
+  expect(form->password == "s3cret" && secret != nullptr && secret->masked(),
+         "a masked field pastes and stays masked");
+}
+
+void rightClickPastesAndOwnerCanTakeIt() {
+  test::Rig rig;
+  std::string clipboard{"\"C:\\Games\"\n"};
+  rig.navigator.setClipboard([&clipboard] {
+    return clipboard;
+  });
+  auto opened = std::make_unique<WholePaste>();
+  WholePaste *screen = opened.get();
+  rig.navigator.push(std::move(opened));
+  rig.frame();
+  const ui::Widget *field = rig.navigator.find("path");
+  expect(field != nullptr, "the field is laid out");
+  const Point at{field->frame().x + 4.0f, field->frame().y + 4.0f};
+  rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Context, at, 0.0f});
+  expect(screen->text == "whole:\"C:\\Games\"", "a right click pastes, to the field's owner");
+
+  rig.frame();
+  rig.navigator.focus("ok");
+  rig.frame();
+  expect(rig.navigator.paste() && screen->fellThrough == clipboard,
+         "off a field, the screen takes the paste");
+}
+
 void caretMovesWhileEditing() {
   test::Rig rig;
   rig.navigator.setKeyboard([] {
@@ -632,6 +717,8 @@ int main() {
   wideTabStripScrolls();
   cardButtonsChooseInAGrid();
   textFieldsTakeTypedText();
+  pasteGoesIntoTheFocusedField();
+  rightClickPastesAndOwnerCanTakeIt();
   caretMovesWhileEditing();
   fittedAroundKeepsAPlaceInView();
   valueThatSetsTheEndShowsWhole();

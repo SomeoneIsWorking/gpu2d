@@ -127,6 +127,11 @@ public:
     limit_ = bytes;
     return *this;
   }
+  /// Who takes pasted text, whole and trimmed, instead of its going in at the caret.
+  TextField &onPaste(std::function<void(std::string)> pasted) {
+    pasted_ = std::move(pasted);
+    return *this;
+  }
   /// What Submit does, and the hint's word for it.
   TextField &onSubmit(std::function<void()> submitted, std::string verb = "Done") {
     submitted_ = std::move(submitted);
@@ -152,6 +157,11 @@ public:
   [[nodiscard]] float cornerRadius(const Theme &theme) const override;
   bool act(Action action, ActContext &context) override;
   bool type(std::string_view typed, ActContext &context) override;
+  /// Pasted text is typed in with the space and line ends around it gone, its first line alone
+  /// when it has several; `onPaste` takes it instead.
+  bool paste(std::string_view text, ActContext &context) override;
+  /// A right click or long press pastes.
+  bool context(Point at, ActContext &context) override;
   [[nodiscard]] std::vector<Hint> hints() const override;
   void paint(Painter &painter) const override;
 
@@ -169,6 +179,7 @@ private:
   std::string placeholder_;
   bool masked_{false};
   std::size_t limit_{SIZE_MAX};
+  std::function<void(std::string)> pasted_;
   std::function<void()> submitted_;
   std::string verb_;
   std::string labelShown_;

@@ -63,6 +63,10 @@ public:
     return false;
   }
   /// Typed text; true when taken.
+  /// The clipboard's text when the focused widget does not take it.
+  virtual bool paste(std::string_view /*text*/, ActContext & /*context*/) {
+    return false;
+  }
   virtual bool text(std::string_view /*typed*/, ActContext & /*context*/) {
     return false;
   }

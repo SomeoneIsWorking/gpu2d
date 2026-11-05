@@ -366,6 +366,27 @@ bool TextField::type(std::string_view typed, ActContext & /*context*/) {
   return true;
 }
 
+bool TextField::paste(std::string_view text, ActContext &context) {
+  constexpr std::string_view space = " \t\r\n\f\v";
+  const std::size_t from = text.find_first_not_of(space);
+  if (from == std::string_view::npos) {
+    return false;
+  }
+  std::string_view line = text.substr(from);
+  line = line.substr(0, line.find_first_of("\r\n"));
+  line = line.substr(0, line.find_last_not_of(space) + 1);
+  if (!pasted_) {
+    return type(line, context);
+  }
+  edit();
+  pasted_(std::string{line});
+  return true;
+}
+
+bool TextField::context(Point /*at*/, ActContext &context) {
+  return paste(context.clipboard(), context);
+}
+
 std::vector<Hint> TextField::hints() const {
   std::vector<Hint> hints{Hint{{Action::Accept}, "Type"}};
   if (submitted_) {

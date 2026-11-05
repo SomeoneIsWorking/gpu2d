@@ -216,6 +216,9 @@ public:
   void focus(std::string id) override {
     focusTo = std::move(id);
   }
+  [[nodiscard]] std::string clipboard() const override {
+    return navigator_.clipboard_ ? navigator_.clipboard_() : std::string{};
+  }
   void openKeyboard() override {
     if (navigator_.keyboard_) {
       navigator_.keyboard_();
@@ -1216,6 +1219,26 @@ bool Navigator::text(std::string_view typed) {
   Widget *focused = findIn(*entry->root, screen.view().focused);
   const bool handled =
       (focused != nullptr && focused->type(typed, context)) || screen.text(typed, context);
+  --busy_;
+  settle(context);
+  return handled;
+}
+
+bool Navigator::paste() {
+  Entry *entry = fresh();
+  if (entry == nullptr || !clipboard_) {
+    return false;
+  }
+  const std::string pasted = clipboard_();
+  if (pasted.empty()) {
+    return false;
+  }
+  Screen &screen = *entry->screen;
+  Context context{*this, screen};
+  ++busy_;
+  Widget *focused = findIn(*entry->root, screen.view().focused);
+  const bool handled =
+      (focused != nullptr && focused->paste(pasted, context)) || screen.paste(pasted, context);
   --busy_;
   settle(context);
   return handled;
