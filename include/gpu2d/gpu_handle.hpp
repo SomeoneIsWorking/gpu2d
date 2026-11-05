@@ -56,5 +56,6 @@ using TextureHandle = GpuHandle<SDL_GPUTexture, SDL_ReleaseGPUTexture>;
 using SamplerHandle = GpuHandle<SDL_GPUSampler, SDL_ReleaseGPUSampler>;
 using ShaderHandle = GpuHandle<SDL_GPUShader, SDL_ReleaseGPUShader>;
 using PipelineHandle = GpuHandle<SDL_GPUGraphicsPipeline, SDL_ReleaseGPUGraphicsPipeline>;
+using FenceHandle = GpuHandle<SDL_GPUFence, SDL_ReleaseGPUFence>;
 
 } // namespace gpu2d

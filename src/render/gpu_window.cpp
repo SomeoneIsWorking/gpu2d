@@ -20,6 +20,46 @@ constexpr const char *gpuDriver = "metal";
 constexpr const char *gpuDriver = "vulkan";
 #endif
 
+#if defined(__linux__) && defined(SDL_PROP_GPU_TEXTURE_CREATE_VULKAN_DMABUF_FD_NUMBER)
+#define GPU2D_DMABUF_IMPORT
+/// VK_API_VERSION_1_2: external memory, dedicated allocations and image format lists are core.
+constexpr Uint32 vulkan12 = (1U << 22U) | (2U << 12U);
+/// What SDL needs opted into to wrap a DMA-BUF plane as a texture.
+constexpr std::array<const char *, 4> dmabufExtensions{
+    "VK_KHR_external_memory_fd", "VK_EXT_external_memory_dma_buf",
+    "VK_EXT_image_drm_format_modifier", "VK_EXT_queue_family_foreign"};
+#endif
+
+/// A device of gpuDriver taking gpu2d's shader formats; with `dmabuf`, one that can also import
+/// DMA-BUFs, or none where the driver cannot.
+SDL_GPUDevice *openDevice(bool dmabuf) {
+  const SDL_PropertiesID props = SDL_CreateProperties();
+  const SDL_GPUShaderFormat formats = builtShaderFormats();
+  SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, gpuDriver);
+  SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,
+                         (formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0);
+  SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN,
+                         (formats & SDL_GPU_SHADERFORMAT_MSL) != 0);
+#ifdef GPU2D_DMABUF_IMPORT
+  std::array<const char *, dmabufExtensions.size()> names = dmabufExtensions;
+  SDL_GPUVulkanOptions options{};
+  options.vulkan_api_version = vulkan12;
+  options.device_extension_count = static_cast<Uint32>(names.size());
+  options.device_extension_names = names.data();
+  if (dmabuf) {
+    SDL_SetPointerProperty(props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &options);
+  }
+#else
+  if (dmabuf) {
+    SDL_DestroyProperties(props);
+    return nullptr;
+  }
+#endif
+  SDL_GPUDevice *device = SDL_CreateGPUDeviceWithProperties(props);
+  SDL_DestroyProperties(props);
+  return device;
+}
+
 /// Without vsync when hidden: nothing is seen, and a frame should not wait for a display.
 SDL_GPUPresentMode choosePresentMode(SDL_GPUDevice *device, SDL_Window *window, bool hidden) {
   if (!hidden) {
@@ -51,7 +91,11 @@ GpuWindow::GpuWindow(const WindowOptions &options) {
     if (window_ == nullptr) {
       throw GpuError{"cannot open a window"};
     }
-    device_ = SDL_CreateGPUDevice(builtShaderFormats(), false, gpuDriver);
+    device_ = openDevice(true);
+    importsDmabuf_ = device_ != nullptr;
+    if (device_ == nullptr) {
+      device_ = openDevice(false);
+    }
     if (device_ == nullptr) {
       throw GpuError{std::string{"cannot open a "} + gpuDriver + " GPU device"};
     }

@@ -12,7 +12,7 @@ library itself never logs.
 | Image decoding | `include/gpu2d/image/decode.hpp`, `src/image/decode.cpp` | PNG, JPEG, WebP (anything SDL3_image reads) from a file or memory into a `Bitmap` |
 | Image resizing | `include/gpu2d/image/resize.hpp`, `src/image/resize.cpp` | Cubic `resized` (Mitchell down, Catmull-Rom up) and aspect-keeping `fittedWithin` |
 | PNG encoding | `include/gpu2d/image/png_encoder.hpp`, `src/image/png_encoder.cpp` | RGBA to PNG bytes in memory through libpng |
-| Window and device | `include/gpu2d/gpu_window.hpp`, `src/render/gpu_window.cpp` | SDL window plus the `SDL_GPUDevice` claiming it (driver `metal` on Apple systems, `vulkan` elsewhere, asked for the formats `builtShaderFormats` names); hidden mode (unmapped, no vsync); swapchain acquire; X11 window id |
+| Window and device | `include/gpu2d/gpu_window.hpp`, `src/render/gpu_window.cpp` | SDL window plus the `SDL_GPUDevice` claiming it (driver `metal` on Apple systems, `vulkan` elsewhere, asked for the formats `builtShaderFormats` names); on Linux with an SDL that defines `SDL_PROP_GPU_TEXTURE_CREATE_VULKAN_DMABUF_FD_NUMBER`, first a Vulkan 1.2 device opted into the DMA-BUF import extensions, else a plain one (`importsDmabuf`); hidden mode (unmapped, no vsync); swapchain acquire; X11 window id |
 | Window platform | `src/render/window_platform.hpp`, `window_platform_x11.cpp` (Linux and other X11 systems), `window_platform_default.cpp` (elsewhere), picked in `CMakeLists.txt` | SDL hints before video starts: X11 driver and 32-bit ARGB visual (translucent window), or an opaque window |
 | Canvas | `include/gpu2d/canvas.hpp`, `src/render/canvas.cpp` | Drawing API, transform and clip stacks, blend modes, passes per target, batching, blur strips, `submit` |
 | Pipelines | `include/gpu2d/pipeline.hpp`, `src/render/pipeline.cpp` | Shaders from embedded SPIR-V, or MSL (entry `main0`) when the device takes no SPIR-V, chosen from `SDL_GetGPUShaderFormats`; one pipeline per (target format, blend mode) |
@@ -23,6 +23,7 @@ library itself never logs.
 | GPU object ownership | `include/gpu2d/gpu_handle.hpp`, `include/gpu2d/gpu_error.hpp`, `src/render/gpu_error.cpp` | RAII handles for SDL GPU objects; the exception carrying SDL's reason |
 | Textures | `include/gpu2d/texture.hpp`, `src/render/texture.cpp` | Upload from RGBA (mipmapped when trilinear) and `TextureView` |
 | Image loading | `include/gpu2d/image_loader.hpp`, `src/render/image_loader.cpp` ([image-loader.md](image-loader.md)) | `ImageLoader`: decodes on worker threads, lands textures on the render thread within a per-frame budget; handles that read pending until then, shared per key, cancelled when dropped, failures reported |
+| DMA-BUF pictures | `include/gpu2d/dmabuf_picture.hpp`, `src/render/dmabuf_picture.cpp`, `src/shaders/ycbcr.*` | `DmabufPicture`: a two-plane 4:2:0 picture in DMA-BUFs (a hardware decoder's) wrapped as R8 and RG8 textures for one draw, converted through the caller's `YcbcrToRgb` into an RGBA target (cycled, so the one drawn from stays intact), its owner kept until that draw's fence signals; `view`, `read` |
 | Render targets | `include/gpu2d/render_target.hpp`, `include/gpu2d/surface.hpp`, `src/render/render_target.cpp` | Offscreen RGBA8 targets, sampled or read back into a `Bitmap` |
 | Text | `include/gpu2d/text.hpp`, `src/render/text.cpp` | The one text layout: HarfBuzz shapes a label (kerning per `FaceOptions`) and each character stands at its exact fractional pen, letter spacing included; SDL3_ttf rasterises each character into its GPU atlas; an outline (`TextStyle::outline`, FreeType's stroker, centred on the glyph) drawn under a label; metrics, glyph ink bounds, measuring (the exact advance), cached characters retired after submit |
 | UI toolkit | `include/gpu2d/ui/`, `src/ui/` ([ui-toolkit.md](ui-toolkit.md)) | `gpu2d::ui`: theme tokens, layout containers, widgets, spatial focus, the screen stack (`Navigator`), dialogs and choice lists, one motion clock, UTF-8 text fitting; app-supplied face, glyphs and sounds |
@@ -46,6 +47,8 @@ command buffer, then calls `Text::retire()` so labels not drawn that frame free 
 - `gpu2d::image` needs no window or GPU and is safe on worker threads.
 - An `ImageLoader`'s decodes run on its workers; its textures are made and released on the render
   thread in `upload`.
+- A `DmabufPicture` samples a picture's DMA-BUFs only in the draw `show` submits; its writer must
+  have finished before `show`, and must not write it again while the picture's owner lives.
 
 ## Testing
 

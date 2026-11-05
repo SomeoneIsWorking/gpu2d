@@ -58,6 +58,11 @@ public:
   }
   /// The X11 window id, for window properties such as Gamescope's overlay; 0 outside X11.
   [[nodiscard]] std::uint64_t x11Window() const;
+  /// Whether the device wraps DMA-BUFs as textures (`DmabufPicture`): Linux's Vulkan, with an SDL
+  /// and a driver that can.
+  [[nodiscard]] bool importsDmabuf() const noexcept {
+    return importsDmabuf_;
+  }
   /// The present mode in use: immediate (or mailbox) when hidden, vsync when shown.
   [[nodiscard]] SDL_GPUPresentMode presentMode() const noexcept {
     return presentMode_;
@@ -75,6 +80,7 @@ private:
   SDL_GPUDevice *device_{};
   bool claimed_{false};
   bool translucent_{false};
+  bool importsDmabuf_{false};
   SDL_GPUPresentMode presentMode_{SDL_GPU_PRESENTMODE_VSYNC};
 };
 

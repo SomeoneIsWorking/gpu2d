@@ -50,6 +50,7 @@ add_library(gpu2d_render STATIC
   src/render/texture.cpp
   src/render/image_loader.cpp
   src/render/render_target.cpp
+  src/render/dmabuf_picture.cpp
   src/render/canvas.cpp
   src/render/text.cpp
 )
@@ -65,7 +66,8 @@ endif()
 gpu2d_compile_shaders(gpu2d_render
   src/shaders/shape.vert src/shaders/shape.frag
   src/shaders/mesh.vert src/shaders/mesh.frag
-  src/shaders/blur.vert src/shaders/blur_horizontal.frag src/shaders/blur_vertical.frag)
+  src/shaders/blur.vert src/shaders/blur_horizontal.frag src/shaders/blur_vertical.frag
+  src/shaders/ycbcr.vert src/shaders/ycbcr.frag)
 target_include_directories(gpu2d_render PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(gpu2d_render
   PUBLIC PkgConfig::GPU2D_SDL3 PkgConfig::GPU2D_SDL3_TTF PkgConfig::GPU2D_HARFBUZZ gpu2d::image)
