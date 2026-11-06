@@ -44,4 +44,8 @@ bool prepareWindow() {
   return false;
 }
 
+bool finishWindow(SDL_Window * /*window*/) {
+  return false;
+}
+
 } // namespace gpu2d::window_platform

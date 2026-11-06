@@ -55,11 +55,15 @@ add_library(gpu2d_render STATIC
   src/render/text.cpp
 )
 add_library(gpu2d::render ALIAS gpu2d_render)
-# The window system's part of opening a window: X11's ARGB visual where windows are X11's.
+# The window system's part of opening a window: X11's ARGB visual, Cocoa's non-opaque window.
 if(UNIX AND NOT APPLE AND NOT ANDROID)
   find_package(X11 REQUIRED)
   target_sources(gpu2d_render PRIVATE src/render/window_platform_x11.cpp)
   target_link_libraries(gpu2d_render PRIVATE X11::X11)
+elseif(APPLE)
+  enable_language(OBJCXX)
+  target_sources(gpu2d_render PRIVATE src/render/window_platform_cocoa.mm)
+  target_link_libraries(gpu2d_render PRIVATE "-framework Cocoa" "-framework QuartzCore")
 else()
   target_sources(gpu2d_render PRIVATE src/render/window_platform_default.cpp)
 endif()

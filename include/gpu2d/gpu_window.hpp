@@ -2,8 +2,8 @@
 // that draws into it, made and claimed together. Where windows are X11's it is always X11 (overlay
 // properties such as Gamescope's are X11 window properties), on a 32-bit visual where the server
 // has one, so the window's premultiplied alpha is what a compositor blends with what lies below;
-// elsewhere it is opaque (`window_platform`). Hidden is an unmapped window that presents without
-// vsync.
+// on Apple systems the window and its Metal layer are not opaque, to the same end; elsewhere it is
+// opaque (`window_platform`). Hidden is an unmapped window that presents without vsync.
 #pragma once
 
 #include <cstdint>
@@ -51,8 +51,8 @@ public:
   [[nodiscard]] std::string deviceName() const;
   /// SDL's GPU driver: "metal" on Apple systems, "vulkan" elsewhere.
   [[nodiscard]] std::string driver() const;
-  /// Whether the window has a 32-bit visual, so its alpha reaches the compositor; false when
-  /// the X server has none or the platform is not X11, and the window is opaque.
+  /// Whether the window's alpha reaches the compositor: X11 with a 32-bit visual, or Apple systems;
+  /// false where it is opaque, or on Android, where the Activity sets the surface's format.
   [[nodiscard]] bool translucent() const noexcept {
     return translucent_;
   }

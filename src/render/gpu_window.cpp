@@ -103,6 +103,7 @@ GpuWindow::GpuWindow(const WindowOptions &options) {
       throw GpuError{"cannot draw into the window"};
     }
     claimed_ = true;
+    translucent_ = window_platform::finishWindow(window_) || translucent_;
     presentMode_ = choosePresentMode(device_, window_, options.hidden);
     if (!SDL_SetGPUSwapchainParameters(device_, window_, SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
                                        presentMode_)) {
