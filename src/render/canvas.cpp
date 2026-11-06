@@ -78,7 +78,7 @@ Transform Transform::scaleAbout(Point centre, float scale) noexcept {
 }
 
 Canvas::Canvas(SDL_GPUDevice &device)
-    : device_{&device}, shapePipeline_{device}, meshPipeline_{device}, blurPipeline_{device},
+    : device_{&device}, shapePipeline_{device}, meshPipeline_{device}, blurPipeline_{device}, upscalePipeline_{device},
       shapeBuffer_{device, SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ},
       vertexBuffer_{device, SDL_GPU_BUFFERUSAGE_VERTEX},
       indexBuffer_{device, SDL_GPU_BUFFERUSAGE_INDEX},
@@ -325,6 +325,23 @@ RenderTarget &Canvas::strip(int width, int height) {
   return *slot;
 }
 
+void Canvas::upscaled(const TextureView &texture, const Rect &destination) {
+  if (texture.texture == nullptr || texture.width <= 0 || texture.height <= 0) {
+    return;
+  }
+  const Rect placed = transform().apply(destination);
+  const Surface &target = current().target;
+  const auto slot = static_cast<std::uint32_t>(upscales_.size());
+  upscales_.push_back(UpscaleDraw{
+      .source = texture,
+      .placement = BlurPlacement{.destination = {placed.x, placed.y, placed.width, placed.height},
+                                 .source = {0.0f, 0.0f, 1.0f, 1.0f},
+                                 .targetSize = {static_cast<float>(target.width),
+                                                static_cast<float>(target.height)},
+                                 .padding = {}}});
+  extend(BatchKind::Upscale, texture, slot, 1);
+}
+
 void Canvas::blurBehind(const Backdrop &backdrop) {
   if (backdrop.scene == nullptr || backdrop.sigma <= 0.0f || backdrop.opacity <= 0.0f) {
     return;
@@ -430,6 +447,7 @@ void Canvas::submit(SDL_GPUCommandBuffer *commands) {
   vertices_.clear();
   indices_.clear();
   blurs_.clear();
+  upscales_.clear();
   stripsUsed_ = 0;
   blend_ = BlendMode::Over;
 }
@@ -496,6 +514,16 @@ void Canvas::encode(SDL_GPUCommandBuffer *commands, const Pass &pass) {
       } else {
         SDL_PushGPUFragmentUniformData(commands, 0, &blur.vertical, sizeof(blur.vertical));
       }
+      SDL_DrawGPUPrimitives(render, 4, 1, 0, 0);
+      break;
+    }
+    case BatchKind::Upscale: {
+      const UpscaleDraw &upscale = upscales_[batch.first];
+      SDL_BindGPUGraphicsPipeline(render, upscalePipeline_.get(format));
+      const SDL_GPUTextureSamplerBinding binding{.texture = upscale.source.texture,
+                                                 .sampler = nearest_.get()};
+      SDL_BindGPUFragmentSamplers(render, 0, &binding, 1);
+      SDL_PushGPUVertexUniformData(commands, 0, &upscale.placement, sizeof(upscale.placement));
       SDL_DrawGPUPrimitives(render, 4, 1, 0, 0);
       break;
     }

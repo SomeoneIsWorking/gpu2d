@@ -18,6 +18,7 @@ library itself never logs.
 | Pipelines | `include/gpu2d/pipeline.hpp`, `src/render/pipeline.cpp` | Shaders from embedded SPIR-V, or MSL (entry `main0`) when the device takes no SPIR-V, chosen from `SDL_GetGPUShaderFormats`; one pipeline per (target format, blend mode) |
 | SDF shapes | `include/gpu2d/shape_pipeline.hpp`, `src/render/shape_pipeline.cpp`, `src/shaders/shape.*` | Rounded boxes (filled or stroked) and arcs, one instanced quad each, records in a storage buffer |
 | Meshes | `include/gpu2d/mesh_pipeline.hpp`, `src/render/mesh_pipeline.cpp`, `src/shaders/mesh.*` | Indexed triangles with per-vertex colour sampling a texture (straight or premultiplied) |
+| Upscale | `include/gpu2d/upscale_pipeline.hpp`, `src/render/upscale_pipeline.cpp`, `src/shaders/upscale.frag` | FSR 1's EASU in one pass, `Canvas::upscaled`. |
 | Backdrop blur | `include/gpu2d/blur_pipeline.hpp`, `src/render/blur_pipeline.cpp`, `src/shaders/blur*`, `src/shaders/gaussian.glsl` | Separable Gaussian: horizontal into a strip, vertical through a rounded-rect mask |
 | Streaming buffers | `include/gpu2d/stream_buffer.hpp`, `src/render/stream_buffer.cpp` | Per-frame CPU-to-GPU buffers that grow and cycle |
 | GPU object ownership | `include/gpu2d/gpu_handle.hpp`, `include/gpu2d/gpu_error.hpp`, `src/render/gpu_error.cpp` | RAII handles for SDL GPU objects; the exception carrying SDL's reason |

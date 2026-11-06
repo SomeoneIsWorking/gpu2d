@@ -169,6 +169,26 @@ void blurSpreads(GpuFixture &gpu) {
 
 } // namespace
 
+void upscaledKeepsItsEdge(GpuFixture &gpu) {
+  // Two black columns, then two white, four rows down.
+  std::array<std::uint8_t, 64> halves{};
+  for (std::size_t texel = 0; texel < 16; ++texel) {
+    const std::uint8_t level = texel % 4 < 2 ? 0 : 255;
+    halves[texel * 4] = level;
+    halves[texel * 4 + 1] = level;
+    halves[texel * 4 + 2] = level;
+    halves[texel * 4 + 3] = 255;
+  }
+  const gpu2d::Texture texture{gpu.device(), halves, 4, 4, gpu2d::Filter::Nearest};
+  const auto frame = gpu.draw([&texture](Canvas &canvas) {
+    canvas.upscaled(texture.view(), Rect{0.0f, 0.0f, 64.0f, 64.0f});
+  });
+  expectPixel(frame, 4, 32, Pixel{0, 0, 0, 255}, "the dark side stays dark");
+  expectPixel(frame, 60, 32, Pixel{255, 255, 255, 255}, "the light side stays light");
+  expectPixel(frame, 22, 32, Pixel{0, 0, 0, 255}, "the edge does not ring below black");
+  expectPixel(frame, 42, 32, Pixel{255, 255, 255, 255}, "nor above white");
+}
+
 int main() {
   GpuFixture gpu;
   roundedRect(gpu);
@@ -181,6 +201,7 @@ int main() {
   textureTint(gpu);
   renderTargetReadBack(gpu);
   blurSpreads(gpu);
+  upscaledKeepsItsEdge(gpu);
   std::printf("canvas: all checks passed\n");
   return 0;
 }

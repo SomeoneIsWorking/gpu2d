@@ -13,6 +13,7 @@
 #include <SDL3/SDL_gpu.h>
 
 #include "gpu2d/blur_pipeline.hpp"
+#include "gpu2d/upscale_pipeline.hpp"
 #include "gpu2d/geometry.hpp"
 #include "gpu2d/gpu_handle.hpp"
 #include "gpu2d/mesh_pipeline.hpp"
@@ -95,6 +96,8 @@ public:
             std::span<const std::uint32_t> indices);
   /// The `source` pixels of `texture` stretched over `destination`, multiplied by `tint`.
   void image(const TextureView &texture, const Rect &source, const Rect &destination, Colour tint);
+  /// The whole of `texture` over `destination` through FSR 1's upscale, opaque.
+  void upscaled(const TextureView &texture, const Rect &destination);
   /// The backdrop blur (two passes). `backdrop.scene` must be finished: drawn in an earlier pass
   /// than the current one.
   void blurBehind(const Backdrop &backdrop);
@@ -103,7 +106,7 @@ public:
   void submit(SDL_GPUCommandBuffer *commands);
 
 private:
-  enum class BatchKind : std::uint8_t { Shapes, Mesh, BlurHorizontal, BlurVertical };
+  enum class BatchKind : std::uint8_t { Shapes, Mesh, BlurHorizontal, BlurVertical, Upscale };
 
   /// A run of draws with one state. `first` and `count` are shape instances, mesh indices or
   /// a blur's slot.
@@ -129,6 +132,11 @@ private:
     VerticalBlur vertical;
   };
 
+  struct UpscaleDraw {
+    TextureView source;
+    BlurPlacement placement;
+  };
+
   [[nodiscard]] Pass &current();
   [[nodiscard]] Transform transform() const noexcept;
   void addShape(ShapeRecord shape);
@@ -150,6 +158,7 @@ private:
   ShapePipeline shapePipeline_;
   MeshPipeline meshPipeline_;
   BlurPipeline blurPipeline_;
+  UpscalePipeline upscalePipeline_;
   StreamBuffer shapeBuffer_;
   StreamBuffer vertexBuffer_;
   StreamBuffer indexBuffer_;
@@ -168,6 +177,7 @@ private:
   std::vector<Vertex> vertices_;
   std::vector<std::uint32_t> indices_;
   std::vector<BlurDraw> blurs_;
+  std::vector<UpscaleDraw> upscales_;
   /// The blur's intermediate strips, reused frame to frame.
   std::vector<std::unique_ptr<RenderTarget>> strips_;
   std::size_t stripsUsed_{};

@@ -46,6 +46,7 @@ add_library(gpu2d_render STATIC
   src/render/shape_pipeline.cpp
   src/render/mesh_pipeline.cpp
   src/render/blur_pipeline.cpp
+  src/render/upscale_pipeline.cpp
   src/render/stream_buffer.cpp
   src/render/texture.cpp
   src/render/image_loader.cpp
@@ -71,6 +72,7 @@ gpu2d_compile_shaders(gpu2d_render
   src/shaders/shape.vert src/shaders/shape.frag
   src/shaders/mesh.vert src/shaders/mesh.frag
   src/shaders/blur.vert src/shaders/blur_horizontal.frag src/shaders/blur_vertical.frag
+  src/shaders/upscale.frag
   src/shaders/ycbcr.vert src/shaders/ycbcr.frag)
 target_include_directories(gpu2d_render PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(gpu2d_render
