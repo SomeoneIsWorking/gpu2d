@@ -10,6 +10,8 @@ namespace {
 /// A scroll bar's width and its shortest length, in dp.
 constexpr float scrollBarDp = 4.0f;
 constexpr float scrollBarMinDp = 32.0f;
+/// The bar with a bar's width either side of it, in bar widths.
+constexpr float scrollBarGutter = 3.0f;
 
 /// The child's height when it is `width` wide: its fixed one or what it measures.
 float heightOf(LayoutContext &context, Widget &child, float width) {
@@ -23,6 +25,11 @@ float heightOf(LayoutContext &context, Widget &child, float width) {
 float widthIn(const Theme &theme, const Widget &child, float width) {
   const std::optional<float> fixed = child.fixedWidth();
   return fixed ? std::min(theme.px(*fixed), width) : width;
+}
+
+/// Between a scroll view's side and its content: the focus ring's whole reach.
+float ringRoom(const Theme &theme) {
+  return theme.px(theme.shape.focusGap + theme.shape.focusRing);
 }
 
 } // namespace
@@ -321,7 +328,9 @@ Size ScrollView::measure(LayoutContext &context, float maxWidth) {
   if (children_.empty()) {
     return Widget::measure(context, maxWidth);
   }
-  const Size content = children_.front()->measure(context, maxWidth);
+  const float room = ringRoom(context.theme);
+  const Size content =
+      children_.front()->measure(context, std::max(0.0f, maxWidth - room * 2.0f));
   const Size own = Widget::measure(context, maxWidth);
   return Size{maxWidth, fixedHeight() ? own.height : content.height};
 }
@@ -335,7 +344,13 @@ void ScrollView::arrange(LayoutContext &context, const Rect &frame) {
     return;
   }
   Widget &content = *children_.front();
-  const float height = heightOf(context, content, frame.width);
+  const float room = ringRoom(context.theme);
+  float width = std::max(0.0f, frame.width - room * 2.0f);
+  float height = heightOf(context, content, width);
+  if (context.touch && height > frame.height) {
+    width = std::max(0.0f, width - context.theme.px(scrollBarDp) * scrollBarGutter);
+    height = heightOf(context, content, width);
+  }
   scroll.viewport = frame.height;
   scroll.limit = std::max(0.0f, height - frame.height);
   scroll.offset.aim(std::clamp(scroll.offset.target(), 0.0f, scroll.limit));
@@ -344,7 +359,7 @@ void ScrollView::arrange(LayoutContext &context, const Rect &frame) {
   offset_ = offset;
   limit_ = scroll.limit;
   content.arrange(context,
-                  Rect{frame.x, frame.y - offset, frame.width, std::max(height, frame.height)});
+                  Rect{frame.x + room, frame.y - offset, width, std::max(height, frame.height)});
 }
 
 void ScrollView::paint(Painter &painter) const {

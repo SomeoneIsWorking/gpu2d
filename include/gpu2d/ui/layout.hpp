@@ -162,7 +162,8 @@ public:
 
 /// One child in a clipped frame, scrolled. Its offset is the screen's, kept by the view's id,
 /// which therefore must not be empty; it eases to where the focus or the wheel sends it, and a drag
-/// up or down moves it with the pointer.
+/// up or down moves it with the pointer. The child stands in from the sides by the focus ring, and
+/// from the scroll bar when one shows, so a ring stays in the frame and off the bar.
 class ScrollView : public Widget {
 public:
   explicit ScrollView(std::string id) : Widget{std::move(id)} {

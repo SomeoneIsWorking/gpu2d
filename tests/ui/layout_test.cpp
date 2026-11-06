@@ -150,6 +150,31 @@ void scrollViewClampsItsOffset() {
   expect(view.clip().has_value() && view.clip()->y == 100.0f, "it clips to its frame");
 }
 
+void scrollViewKeepsTheRingInsideAndOffTheBar() {
+  Layout layout;
+  const ui::Theme &theme = layout.context.theme;
+  const float ring = theme.px(theme.shape.focusGap + theme.shape.focusRing);
+  const float bar = theme.px(4.0f);
+  ui::ScrollView view{"scroll"};
+  auto &column = view.content<ui::Column>();
+  for (int i = 0; i < 10; ++i) {
+    column.add<ui::Spacer>(0.0f).fixHeight(50.0f);
+  }
+  const Rect frame{20.0f, 0.0f, 300.0f, 200.0f};
+  view.arrange(layout.context, frame);
+  near(column.frame().x - ring, frame.x, "a ring on the content starts inside the view");
+  near(column.frame().right() + ring, frame.right(), "and ends inside it");
+  layout.context.touch = true;
+  view.arrange(layout.context, frame);
+  near(column.frame().right() + ring, frame.right() - bar * 3.0f,
+       "with a bar it ends a bar's width short of it");
+  ui::ScrollView shortView{"short"};
+  auto &shortColumn = shortView.content<ui::Column>();
+  shortColumn.add<ui::Spacer>(0.0f).fixHeight(50.0f);
+  shortView.arrange(layout.context, frame);
+  near(shortColumn.frame().right() + ring, frame.right(), "content that fits leaves no room");
+}
+
 void spatialFocusPrefersStraightAhead() {
   const std::vector<Rect> boxes{
       {0.0f, 100.0f, 300.0f, 50.0f},  // straight below, wide
@@ -187,6 +212,7 @@ int main() {
   rowGivesFixedNaturalThenGrowing();
   gridAndCentre();
   scrollViewClampsItsOffset();
+  scrollViewKeepsTheRingInsideAndOffTheBar();
   spatialFocusPrefersStraightAhead();
   spatialFocusTouchingIsNotOverlapping();
   std::printf("ui layout: all checks passed\n");
