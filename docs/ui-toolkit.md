@@ -57,7 +57,8 @@ it is done, never under the widget handling it.
   first visible child. Up or Down with nothing further to focus scrolls the view holding the focus
   a row.
 - Scrolling eases the focus into view with the section spacing as margin; the first focusable
-  reveals the top, the last the end. Focus the pointer moved scrolls nothing.
+  reveals the top, the last the end. A view that gets shorter, as touch controls take room, brings
+  the focus back. Focus the pointer moved scrolls nothing.
 - The top screen's own hint bars, or every bar when it has none (an overlay over a page),
   show the top screen's prompts; the bars under a screen that has its own stay empty, so none
   shows dimmed below an overlay's card. The prompts: the focused widget's, then the screen's ones

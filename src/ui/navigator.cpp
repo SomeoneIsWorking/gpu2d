@@ -419,6 +419,8 @@ void Navigator::build(Entry &entry) {
     }
   } else if (items.empty()) {
     view.focused.clear();
+  } else if (!view.focusFromPointer && focusViewShrank(entry)) {
+    reveal(entry);
   }
   if (view.editing != view.focused) {
     view.editing.clear();
@@ -636,6 +638,16 @@ void Navigator::focusOn(Entry &entry, const std::string &id, bool pointer) {
     reveal(entry);
   }
   settle(context);
+}
+
+bool Navigator::focusViewShrank(Entry &entry) const {
+  ViewState &view = entry.screen->view();
+  std::vector<Widget *> path;
+  pathTo(*entry.root, view.focused, path);
+  return std::ranges::any_of(path, [&view](const Widget *above) {
+    const auto *scroll = dynamic_cast<const ScrollView *>(above);
+    return scroll != nullptr && view.scroll(scroll->id()).shrank;
+  });
 }
 
 void Navigator::reveal(Entry &entry) {

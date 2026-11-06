@@ -210,6 +210,8 @@ private:
   void focusOn(Entry &entry, const std::string &id, bool pointer);
   /// Scrolls every view holding the focused widget so it shows.
   void reveal(Entry &entry);
+  /// Whether a view holding the focused widget got shorter in the last layout.
+  [[nodiscard]] bool focusViewShrank(Entry &entry) const;
   /// Applies what the handled input asked for.
   void settle(Context &context);
   /// Starts or stops editing `entry`'s focused text field.

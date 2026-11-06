@@ -350,6 +350,7 @@ void ScrollView::arrange(LayoutContext &context, const Rect &frame) {
     width = std::max(0.0f, width - context.theme.px(scrollBarDp) * scrollBarGutter);
     height = heightOf(context, content, width);
   }
+  scroll.shrank = frame.height < scroll.viewport;
   scroll.viewport = frame.height;
   scroll.limit = std::max(0.0f, height - frame.height);
   scroll.offset.aim(std::clamp(scroll.offset.target(), 0.0f, scroll.limit));

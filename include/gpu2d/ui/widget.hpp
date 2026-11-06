@@ -53,6 +53,8 @@ public:
     /// The furthest the content scrolls, in pixels.
     float limit{};
     float viewport{};
+    /// The last layout made the view shorter, which can leave the focus past its end.
+    bool shrank{false};
   };
 
   [[nodiscard]] Scroll &scroll(const std::string &id) {

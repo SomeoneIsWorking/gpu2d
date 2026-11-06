@@ -147,6 +147,25 @@ void scrollEasesTheFocusIntoView() {
   expect(!rig.navigator.animating(), "and settles");
 }
 
+void aViewGettingShorterKeepsTheFocusInIt() {
+  test::Rig rig;
+  rig.navigator.push(std::make_unique<Pages>(40));
+  rig.frame();
+  rig.navigator.focus("row0");
+  for (int i = 0; i < 20; ++i) {
+    rig.navigator.act(Action::Down);
+  }
+  for (int i = 0; i < 60; ++i) {
+    rig.frame(1.0 / 60.0);
+  }
+  rig.viewport.height -= 200.0f;
+  for (int i = 0; i < 60; ++i) {
+    rig.frame(1.0 / 60.0);
+  }
+  expect(rig.navigator.find("row20")->frame().bottom() <= rig.viewport.bottom() - 60.0f + 1.0f,
+         "the focused row comes back inside the shorter list");
+}
+
 void backPopsUnlessTheScreenKeepsIt() {
   test::Rig rig;
   auto owned = std::make_unique<Pages>();
@@ -511,6 +530,7 @@ int main() {
   opensOnTheFirstFocusableAndMovesSpatially();
   focusIsKeptByIdAcrossRebuilds();
   scrollEasesTheFocusIntoView();
+  aViewGettingShorterKeepsTheFocusInIt();
   backPopsUnlessTheScreenKeepsIt();
   inputGoesToTheTopScreenOnly();
   shouldersStepTheTabsFromAnywhere();
