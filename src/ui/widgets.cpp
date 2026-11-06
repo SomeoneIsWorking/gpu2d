@@ -449,7 +449,18 @@ float Item::trailingWidth(LayoutContext &context, float width) {
   if (opens_) {
     wanted += chevronZone(theme);
   }
-  return std::min(wanted, width * trailingShare);
+  return std::min(wanted, endRoom(context, width));
+}
+
+float Item::endRoom(LayoutContext &context, float width) const {
+  const Theme &theme = context.theme;
+  const float share = width * trailingShare;
+  if (!chip_.empty()) {
+    return share;
+  }
+  const float words = std::max(context.text.measure(text_.title, theme.px(theme.type.body)),
+                               context.text.measure(text_.subtitle, theme.px(theme.type.caption)));
+  return std::max(share, width - words - theme.px(theme.spacing.pad));
 }
 
 void Item::arrange(LayoutContext &context, const Rect &frame) {
@@ -641,7 +652,7 @@ float Choice::trailingWidth(LayoutContext &context, float width) {
     widest = std::max(widest, context.text.measure(option, theme.px(theme.type.value)));
   }
   const float chevrons = chevronZone(theme) * 2.0f;
-  const float end = std::min(widest + chevrons, width * trailingShare);
+  const float end = std::min(widest + chevrons, endRoom(context, width));
   shown_ = chosen_ < options_.size() ? fittedBeside(context.text, options_[chosen_], end, chevrons,
                                                     theme.px(theme.type.value))
                                      : std::string{};
@@ -725,11 +736,8 @@ void Choice::paintTrailing(Painter &painter, const Rect &area) const {
 // Slider
 
 float Slider::trailingWidth(LayoutContext &context, float width) {
-  // The title keeps the room it needs; the track takes the rest, up to its full length.
   const Theme &theme = context.theme;
-  const float title = context.text.measure(text().title, theme.px(theme.type.body));
-  const float room = std::max(width * trailingShare, width - title - theme.px(theme.spacing.pad));
-  return std::min(theme.px(trackWidthDp + numberWidthDp), room);
+  return std::min(theme.px(trackWidthDp + numberWidthDp), endRoom(context, width));
 }
 
 Rect Slider::track(const Theme &theme) const noexcept {

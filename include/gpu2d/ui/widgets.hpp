@@ -268,6 +268,8 @@ protected:
   void addExtraHints(std::vector<Hint> &hints) const;
   /// How wide the end's control is, in pixels, for a row `width` wide.
   [[nodiscard]] virtual float trailingWidth(LayoutContext &context, float width);
+  /// The most the end may take of a row `width` wide: what the words leave, at least its share.
+  [[nodiscard]] float endRoom(LayoutContext &context, float width) const;
   /// Draws the end's control in `area`.
   virtual void paintTrailing(Painter &painter, const Rect &area) const;
   [[nodiscard]] bool interactive() const noexcept {

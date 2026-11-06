@@ -329,8 +329,7 @@ Size ScrollView::measure(LayoutContext &context, float maxWidth) {
     return Widget::measure(context, maxWidth);
   }
   const float room = ringRoom(context.theme);
-  const Size content =
-      children_.front()->measure(context, std::max(0.0f, maxWidth - room * 2.0f));
+  const Size content = children_.front()->measure(context, std::max(0.0f, maxWidth - room * 2.0f));
   const Size own = Widget::measure(context, maxWidth);
   return Size{maxWidth, fixedHeight() ? own.height : content.height};
 }

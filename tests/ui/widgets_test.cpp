@@ -619,6 +619,28 @@ void caretMovesWhileEditing() {
   expect(!rig.navigator.editing() && form->submitted == 1, "Submit stops editing");
 }
 
+/// A choice whose end a test reads.
+struct MeasuredChoice : ui::Choice {
+  using ui::Choice::Choice;
+  using ui::Choice::trailingWidth;
+};
+
+void aValueTakesWhatTheWordsLeave() {
+  test::FakeText text;
+  ui::Theme theme;
+  ui::ViewState state;
+  ui::LayoutContext context{theme, text, state, 0.0};
+  const std::vector<std::string> options{"A value longer than its share"};
+  const float value = text.measure(options.front(), theme.px(theme.type.value));
+  const float width = value * 2.0f;
+  MeasuredChoice shortTitle{"sort", ui::Item::Text{"Sort", ""}, options, 0, nullptr};
+  expect(shortTitle.trailingWidth(context, width) > width * 0.45f,
+         "beside a short title the end passes its share and the value shows whole");
+  MeasuredChoice longTitle{"long", ui::Item::Text{std::string(200, 'x'), ""}, options, 0, nullptr};
+  expect(longTitle.trailingWidth(context, width) <= width * 0.45f,
+         "beside a title that needs the row it keeps only its share");
+}
+
 void fittedAroundKeepsAPlaceInView() {
   // The fake face is half the size a byte wide; at size 2 a byte is a pixel and "…" three.
   test::FakeText text;
@@ -720,6 +742,7 @@ int main() {
   pasteGoesIntoTheFocusedField();
   rightClickPastesAndOwnerCanTakeIt();
   caretMovesWhileEditing();
+  aValueTakesWhatTheWordsLeave();
   fittedAroundKeepsAPlaceInView();
   valueThatSetsTheEndShowsWhole();
   toastComesAndGoes();
