@@ -65,14 +65,24 @@ public:
     align_ = align;
     return *this;
   }
+  /// One child under another across the row's width when it is narrower than `dp` (a portrait
+  /// screen); a growing child then shares the height left over.
+  Row &stackBelow(float dp) noexcept {
+    stackBelowDp_ = dp;
+    return *this;
+  }
   [[nodiscard]] Size measure(LayoutContext &context, float maxWidth) override;
   void arrange(LayoutContext &context, const Rect &frame) override;
 
 private:
   /// Each child's width in a row `width` pixels wide inside its padding.
   [[nodiscard]] std::vector<float> widths(LayoutContext &context, float width);
+  /// Whether the children stand one under another in a row `width` pixels wide.
+  [[nodiscard]] bool stacked(const Theme &theme, float width) const;
+  void arrangeStacked(LayoutContext &context, const Rect &area);
 
   Align align_{Align::Centre};
+  std::optional<float> stackBelowDp_;
 };
 
 /// Buttons at their own widths at the row's end, or one under another across its width when they

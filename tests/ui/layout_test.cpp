@@ -105,6 +105,20 @@ void rowGivesFixedNaturalThenGrowing() {
   near(label.frame().y, (60.0f - label.frame().height) * 0.5f, "children are centred across");
 }
 
+void narrowRowStacks() {
+  Layout layout;
+  ui::Row row;
+  row.stackBelow(500.0f).space(10.0f);
+  ui::Widget &first = row.add<ui::Spacer>(0.0f).fixWidth(200.0f).fixHeight(40.0f);
+  ui::Widget &second = row.add<ui::Spacer>(1.0f).fixWidth(300.0f);
+  row.arrange(layout.context, Rect{0.0f, 0.0f, 600.0f, 400.0f});
+  near(second.frame().x, 210.0f, "a row as wide as its threshold keeps its children beside");
+  row.arrange(layout.context, Rect{0.0f, 0.0f, 400.0f, 400.0f});
+  near(first.frame().width, 400.0f, "a row under its threshold gives each child its width");
+  near(second.frame().y, 50.0f, "the next child stands under it");
+  near(second.frame().height, 350.0f, "a growing child takes the height left");
+}
+
 void gridAndCentre() {
   Layout layout;
   ui::Grid grid{"grid", 3};
@@ -210,6 +224,7 @@ int main() {
   fittingKeepsCharactersWhole();
   columnStacksAndSharesSpareRoom();
   rowGivesFixedNaturalThenGrowing();
+  narrowRowStacks();
   gridAndCentre();
   scrollViewClampsItsOffset();
   scrollViewKeepsTheRingInsideAndOffTheBar();

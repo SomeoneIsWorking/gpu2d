@@ -125,9 +125,47 @@ std::vector<float> Row::widths(LayoutContext &context, float width) {
   return widths;
 }
 
+bool Row::stacked(const Theme &theme, float width) const {
+  return stackBelowDp_ && width < theme.px(*stackBelowDp_);
+}
+
+void Row::arrangeStacked(LayoutContext &context, const Rect &area) {
+  const Theme &theme = context.theme;
+  const float gap = theme.px(spacing_);
+  std::vector<float> heights(children_.size(), 0.0f);
+  float used = gaps(theme);
+  float weights = 0.0f;
+  for (std::size_t i = 0; i < children_.size(); ++i) {
+    const Widget &child = *children_[i];
+    if (child.growth() > 0.0f && !child.fixedHeight()) {
+      weights += child.growth();
+      continue;
+    }
+    heights[i] = heightOf(context, *children_[i], area.width);
+    used += heights[i];
+  }
+  const float spare = std::max(0.0f, area.height - used);
+  float y = area.y;
+  for (std::size_t i = 0; i < children_.size(); ++i) {
+    Widget &child = *children_[i];
+    if (weights > 0.0f && child.growth() > 0.0f && !child.fixedHeight()) {
+      heights[i] = spare * child.growth() / weights;
+    }
+    child.arrange(context, Rect{area.x, y, area.width, heights[i]});
+    y += heights[i] + gap;
+  }
+}
+
 Size Row::measure(LayoutContext &context, float maxWidth) {
   const Theme &theme = context.theme;
   const float width = std::max(0.0f, maxWidth - padX(theme));
+  if (stacked(theme, width)) {
+    float height = gaps(theme);
+    for (const std::unique_ptr<Widget> &child : children_) {
+      height += heightOf(context, *child, width);
+    }
+    return Size{maxWidth, height + padY(theme)};
+  }
   const std::vector<float> sizes = widths(context, width);
   float height = 0.0f;
   for (std::size_t i = 0; i < children_.size(); ++i) {
@@ -143,6 +181,10 @@ void Row::arrange(LayoutContext &context, const Rect &frame) {
   frame_ = frame;
   const Theme &theme = context.theme;
   const Rect area = inner(theme, frame);
+  if (stacked(theme, area.width)) {
+    arrangeStacked(context, area);
+    return;
+  }
   const std::vector<float> sizes = widths(context, area.width);
   float x = area.x;
   for (std::size_t i = 0; i < children_.size(); ++i) {
