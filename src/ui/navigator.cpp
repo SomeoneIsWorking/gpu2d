@@ -383,13 +383,19 @@ void Navigator::paintChrome(Canvas &canvas, const Screen &chrome) {
   }
 }
 
+Rect Navigator::safeArea() const noexcept {
+  return Rect{viewport_.x + safe_.left, viewport_.y + safe_.top,
+              std::max(viewport_.width - safe_.left - safe_.right, 0.0f),
+              std::max(viewport_.height - safe_.top - safe_.bottom, 0.0f)};
+}
+
 void Navigator::build(Entry &entry) {
   ViewState &view = entry.screen->view();
   LayoutContext context{theme_, text_, view, now_, touch_};
   entry.root = entry.screen->build(theme_);
-  Rect room = viewport_;
+  Rect room = safeArea();
   if (entry.screen->overlay()) {
-    room.height = std::max(room.height - covered_, 0.0f);
+    room.height = std::max(std::min(room.height, viewport_.bottom() - covered_ - room.y), 0.0f);
   }
   entry.area = entry.screen->area(room, theme_);
   entry.root->arrange(context, entry.area);
@@ -499,9 +505,10 @@ void Navigator::placeHints() {
   }
 }
 
-void Navigator::layout(const Rect &viewport, float covered) {
+void Navigator::layout(const Rect &viewport, float covered, const Insets &safe) {
   viewport_ = viewport;
   covered_ = covered;
+  safe_ = safe;
   checkHold();
   std::erase_if(leaving_, [this](const Entry &entry) {
     return !entry.presence.moving(now_);
@@ -515,7 +522,7 @@ void Navigator::layout(const Rect &viewport, float covered) {
   for (Chrome &chrome : chrome_) {
     LayoutContext context{theme_, text_, chrome.screen->view(), now_, touch_};
     chrome.root = chrome.screen->build(theme_);
-    chrome.root->arrange(context, chrome.screen->area(viewport_, theme_));
+    chrome.root->arrange(context, chrome.screen->area(safeArea(), theme_));
   }
   if (stack_.empty()) {
     return;

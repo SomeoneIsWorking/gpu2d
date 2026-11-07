@@ -121,9 +121,11 @@ public:
   void paintChrome(Canvas &canvas, const Screen &chrome);
 
   /// Builds and lays out the screens drawn in `viewport`; overlays stand above the bottom
-  /// `covered` pixels, which a docked keyboard takes. A press held still past the long-press
-  /// time becomes a `Context` here, once a frame.
-  void layout(const Rect &viewport, float covered = 0.0f);
+  /// `covered` pixels, which a docked keyboard takes. Screens and chrome lay out inside `safe`
+  /// (pixels in from each edge: a display cutout, rounded corners), and backdrops still cover the
+  /// whole viewport. A press held still past the long-press time becomes a `Context` here, once a
+  /// frame.
+  void layout(const Rect &viewport, float covered = 0.0f, const Insets &safe = {});
   /// Draws them; after `layout`.
   void paint(Canvas &canvas);
   /// Draws the screens up to the highest one that is not an overlay, for an app that draws its
@@ -197,6 +199,8 @@ private:
     std::unique_ptr<Screen> screen;
   };
 
+  /// The viewport inside `safe_`.
+  [[nodiscard]] Rect safeArea() const noexcept;
   /// Builds and arranges `entry`'s tree, then settles its focus and scroll.
   void build(Entry &entry);
   /// Rebuilds the top screen with the last viewport; null when there is none.
@@ -264,6 +268,7 @@ private:
   std::optional<Gesture> gesture_;
   Rect viewport_;
   float covered_{};
+  Insets safe_;
   std::vector<Entry> stack_;
   /// Whether `stack_`'s first screen is the root.
   bool root_{false};
