@@ -52,3 +52,5 @@ See [docs/codemap.md](docs/codemap.md) for the owners and the test commands.
 
 MIT; see `LICENSE`. The test font `tests/fonts/CalSans-Regular.ttf` is under the SIL Open Font
 License (`tests/fonts/CalSans-OFL.txt`).
+
+Built with AI assistance (Claude and other LLMs).
