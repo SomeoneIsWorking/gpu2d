@@ -1204,7 +1204,7 @@ void HintBar::show(std::vector<Hint> hints, const Theme &theme, Typesetter &text
   const float gap = theme.px(theme.spacing.gap);
   const float between = touch ? gap * 1.5f : theme.px(theme.spacing.pad * 1.5f);
   const float pad = theme.px(theme.spacing.pad);
-  // A button's ends, past its glyph and label.
+  // A finger's margin either side of the glyph and label.
   const float inset = touch ? theme.px(theme.spacing.pad * 0.75f) : 0.0f;
   const float tall = touch ? theme.px(theme.spacing.touchTarget) : glyph + 2.0f * gap;
   const float centreY = frame_.y + frame_.height * 0.5f;
@@ -1231,6 +1231,12 @@ void HintBar::show(std::vector<Hint> hints, const Theme &theme, Typesetter &text
     }
     width += inset;
     placed.whole = Rect{0.0f, centreY - tall * 0.5f, std::max(width, tall), tall};
+    // A short hint sits in the middle of its finger-wide target.
+    const float centring = (placed.whole.width - width) * 0.5f;
+    for (Rect &box : placed.glyphs) {
+      box.x += centring;
+    }
+    placed.labelX += centring;
     const bool back = std::ranges::find(hint.keys, Action::Back) != hint.keys.end();
     placed.hint = std::move(hint);
     (back ? start : end).push_back(std::move(placed));
@@ -1303,13 +1309,6 @@ void HintBar::paint(Painter &painter) const {
   const Colour ink = painter.fade(words);
   const float centreY = frame_.y + frame_.height * 0.5f;
   for (const Placed &placed : placed_) {
-    if (touch_) {
-      painter.canvas.fillRoundRect(placed.whole, placed.whole.height * 0.5f,
-                                   painter.fade(theme.colours.control));
-      painter.canvas.strokeRoundRect(placed.whole, placed.whole.height * 0.5f,
-                                     painter.px(theme.shape.outline),
-                                     painter.fade(theme.colours.track));
-    }
     for (std::size_t i = 0; i < placed.glyphs.size(); ++i) {
       const Rect &box = placed.glyphs[i];
       if (placed.arrows) {
