@@ -10,11 +10,11 @@ namespace {
 /// How much of the viewport's height an option list may take.
 constexpr float listShare = 0.7f;
 
+} // namespace
+
 void paintScrim(Painter &painter, const Rect &viewport) {
   painter.canvas.fillRect(viewport, painter.fade(painter.theme.colours.scrim));
 }
-
-} // namespace
 
 Rect Screen::area(const Rect &viewport, const Theme & /*theme*/) const {
   return viewport;

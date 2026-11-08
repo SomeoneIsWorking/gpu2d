@@ -99,6 +99,9 @@ private:
   bool closing_{false};
 };
 
+/// Dims what lies under a screen that stands over it.
+void paintScrim(Painter &painter, const Rect &viewport);
+
 /// A card over the dimmed screen: a title, a paragraph and buttons, each closing it and doing its
 /// one thing. Back is the button marked as the way out, or just closes it.
 class Dialog : public Screen {
