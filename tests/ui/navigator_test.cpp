@@ -362,6 +362,47 @@ void downPastTheLastFocusableScrolls() {
   expect(rig.navigator.find("fact20")->frame().y == before, "Up scrolls back");
 }
 
+/// Tabs across the top over a list whose second half stands far below its first.
+class TopTabs final : public ui::Screen {
+public:
+  TopTabs() : Screen{"top-tabs", "Top tabs"} {
+  }
+  [[nodiscard]] std::unique_ptr<ui::Widget> build(const ui::Theme &theme) override {
+    auto root = std::make_unique<ui::Column>();
+    root->add<ui::Tabs>(
+        "tabs", std::vector<ui::Tabs::Tab>{{"one", "One"}, {"two", "Two"}}, 0,
+        [](std::size_t) {
+        },
+        ui::Orientation::Horizontal);
+    auto &list = root->add<ui::List>("rows", theme.spacing.gap);
+    list.grow();
+    for (int i = 0; i < 30; ++i) {
+      if (i == 6) {
+        list.rows().add<ui::Spacer>(0.0f).fixHeight(300.0f);
+      }
+      list.rows().add<ui::Item>("row" + std::to_string(i), ui::Item::Text{"Row", ""}).onPress([] {
+      });
+    }
+    return root;
+  }
+};
+
+void upInAListReachesTheRowOutOfSightBeforeTheTabs() {
+  test::Rig rig;
+  rig.navigator.push(std::make_unique<TopTabs>());
+  rig.frame(1.0);
+  expect(rig.navigator.focus("row29"), "focus starts on the last row");
+  for (int i = 0; i < 23; ++i) {
+    rig.navigator.act(Action::Up);
+    rig.frame(1.0);
+    rig.frame(1.0);
+  }
+  expect(rig.navigator.focused() == "row6", "Up walks the rows of the scrolled list");
+  rig.navigator.act(Action::Up);
+  expect(rig.navigator.focused() == "row5",
+         "the row above the gap, out of sight, comes before the tab past the list's edge");
+}
+
 void anOverlayNamesItsPromptsOnTheBarBelow() {
   test::Rig rig;
   auto owned = std::make_unique<Pages>();
@@ -540,6 +581,7 @@ int main() {
   closeFromTakesTheScreensAbove();
   ringFollowsTheFocus();
   downPastTheLastFocusableScrolls();
+  upInAListReachesTheRowOutOfSightBeforeTheTabs();
   anOverlayNamesItsPromptsOnTheBarBelow();
   overlaysStandAboveACoveredStrip();
   focusAskedWhileHandlingInputWaits();

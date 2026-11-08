@@ -723,20 +723,37 @@ bool Navigator::move(Entry &entry, Direction direction) {
   if (here == items.end()) {
     return false;
   }
-  std::vector<Rect> boxes;
-  std::vector<std::size_t> indexes;
-  for (std::size_t i = 0; i < items.size(); ++i) {
-    if (items[i].widget != here->widget) {
-      boxes.push_back(items[i].widget->frame());
-      indexes.push_back(i);
+  // The nearest that way among the focusables `within` keeps, as an index into `items`.
+  const auto nearest = [&](const auto &within) -> std::optional<std::size_t> {
+    std::vector<Rect> boxes;
+    std::vector<std::size_t> indexes;
+    for (std::size_t i = 0; i < items.size(); ++i) {
+      if (items[i].widget != here->widget && within(items[i])) {
+        boxes.push_back(items[i].widget->frame());
+        indexes.push_back(i);
+      }
     }
+    const std::optional<std::size_t> picked =
+        nearestInDirection(boxes, here->widget->frame(), direction);
+    return picked ? std::optional<std::size_t>{indexes[*picked]} : std::nullopt;
+  };
+  // The innermost group around the focus with something that way wins: a row scrolled out of
+  // sight comes before what lies past the list's edge.
+  std::optional<std::size_t> picked;
+  for (auto group = here->groups.rbegin(); group != here->groups.rend() && !picked; ++group) {
+    picked = nearest([group](const Focusable &item) {
+      return std::ranges::find(item.groups, *group) != item.groups.end();
+    });
   }
-  const std::optional<std::size_t> picked =
-      nearestInDirection(boxes, here->widget->frame(), direction);
+  if (!picked) {
+    picked = nearest([](const Focusable & /*item*/) {
+      return true;
+    });
+  }
   if (!picked) {
     return false;
   }
-  const Focusable &candidate = items[indexes[*picked]];
+  const Focusable &candidate = items[*picked];
   std::string target = candidate.widget->id();
   // Entering a group from outside lands where it prefers, else where it last was, else on its
   // first child in sight.

@@ -39,6 +39,9 @@ it is done, never under the widget handling it.
 - A widget's id is stable across rebuilds. Focus, scroll offsets and the child a group last
   focused are kept in the screen's `ViewState` by id; a focused widget that goes away hands the
   focus to the nearest one where it stood.
+- A direction moves within the innermost group around the focus that has something that way (a
+  list, a tab strip), then the groups around it, then the whole screen: Up in a list reaches the
+  row above even scrolled out of sight before anything past the list's edge.
 - One behaviour per widget kind: A presses a button or item and flips a toggle; Left and Right
   step a choice; A opens a choice's options as a list; LB and RB step tabs from anywhere
   on the screen; focusing a tab chooses it. X and Y do a row's second and third actions when it
