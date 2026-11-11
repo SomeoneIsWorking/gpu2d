@@ -132,24 +132,32 @@ bool Row::stacked(const Theme &theme, float width) const {
 void Row::arrangeStacked(LayoutContext &context, const Rect &area) {
   const Theme &theme = context.theme;
   const float gap = theme.px(spacing_);
+  const auto grows = [](const Widget &child) {
+    return child.growth() > 0.0f && !child.fixedHeight();
+  };
   std::vector<float> heights(children_.size(), 0.0f);
-  float used = gaps(theme);
+  const float room = std::max(0.0f, area.height - gaps(theme));
+  float kept = 0.0f;
+  float all = 0.0f;
   float weights = 0.0f;
   for (std::size_t i = 0; i < children_.size(); ++i) {
-    const Widget &child = *children_[i];
-    if (child.growth() > 0.0f && !child.fixedHeight()) {
-      weights += child.growth();
-      continue;
-    }
     heights[i] = heightOf(context, *children_[i], area.width);
-    used += heights[i];
+    all += heights[i];
+    if (grows(*children_[i])) {
+      weights += children_[i]->growth();
+    } else {
+      kept += heights[i];
+    }
   }
-  const float spare = std::max(0.0f, area.height - used);
+  const bool fits = kept <= room;
   float y = area.y;
   for (std::size_t i = 0; i < children_.size(); ++i) {
     Widget &child = *children_[i];
-    if (weights > 0.0f && child.growth() > 0.0f && !child.fixedHeight()) {
-      heights[i] = spare * child.growth() / weights;
+    if (!fits) {
+      // Too tall for the row: each child gives up the same share, so every one stays reachable.
+      heights[i] *= room / all;
+    } else if (grows(child)) {
+      heights[i] = (room - kept) * child.growth() / weights;
     }
     child.arrange(context, Rect{area.x, y, area.width, heights[i]});
     y += heights[i] + gap;

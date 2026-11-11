@@ -119,6 +119,20 @@ void narrowRowStacks() {
   near(second.frame().height, 350.0f, "a growing child takes the height left");
 }
 
+void shortStackShares() {
+  Layout layout;
+  ui::Row row;
+  row.stackBelow(500.0f).space(10.0f);
+  ui::Widget &first = row.add<ui::Spacer>(0.0f).fixHeight(300.0f);
+  ui::ScrollView &second = row.add<ui::ScrollView>("second");
+  second.grow();
+  second.content<ui::Column>().add<ui::Spacer>(0.0f).fixHeight(100.0f);
+  row.arrange(layout.context, Rect{0.0f, 0.0f, 400.0f, 210.0f});
+  near(first.frame().height, 150.0f, "a child taller than a short row gives up its share");
+  near(second.frame().y, 160.0f, "the next child still stands under it");
+  near(second.frame().height, 50.0f, "a growing child keeps the same share of its own height");
+}
+
 void gridAndCentre() {
   Layout layout;
   ui::Grid grid{"grid", 3};
@@ -225,6 +239,7 @@ int main() {
   columnStacksAndSharesSpareRoom();
   rowGivesFixedNaturalThenGrowing();
   narrowRowStacks();
+  shortStackShares();
   gridAndCentre();
   scrollViewClampsItsOffset();
   scrollViewKeepsTheRingInsideAndOffTheBar();

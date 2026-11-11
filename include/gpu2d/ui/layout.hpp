@@ -66,7 +66,8 @@ public:
     return *this;
   }
   /// One child under another across the row's width when it is narrower than `dp` (a portrait
-  /// screen); a growing child then shares the height left over.
+  /// screen); a growing child then shares the height left over, and when the others alone are
+  /// taller than the row every child gets the same share of its own height.
   Row &stackBelow(float dp) noexcept {
     stackBelowDp_ = dp;
     return *this;
