@@ -83,7 +83,9 @@ GpuWindow::GpuWindow(const WindowOptions &options) {
       throw GpuError{"cannot start SDL video"};
     }
     videoUp_ = true;
-    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE;
+    // Full pixels on a high-density screen (Retina, a scaled Wayland output), not a back buffer the
+    // size of the window in points that the system then stretches. `pixelSize` is what is drawn.
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (options.hidden) {
       flags |= SDL_WINDOW_HIDDEN;
     }
