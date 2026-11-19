@@ -163,18 +163,6 @@ std::uint64_t GpuWindow::x11Window() const {
                                                           SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0));
 }
 
-void GpuWindow::waitForImage() {
-  if (!SDL_WaitForGPUSwapchain(device_, window_)) {
-    throw GpuError{"cannot wait for the window's image"};
-  }
-}
-
-void GpuWindow::framesInFlight(std::uint32_t frames) {
-  if (!SDL_SetGPUAllowedFramesInFlight(device_, frames)) {
-    throw GpuError{"cannot set the frames in flight"};
-  }
-}
-
 std::optional<Surface> GpuWindow::acquire(SDL_GPUCommandBuffer *commands) {
   SDL_GPUTexture *texture = nullptr;
   Uint32 width = 0;

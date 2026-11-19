@@ -71,12 +71,6 @@ public:
   /// The swapchain image to draw this frame into, acquired on `commands`; nothing when there is
   /// none to draw (a minimised window). Throws GpuError when acquiring fails.
   [[nodiscard]] std::optional<Surface> acquire(SDL_GPUCommandBuffer *commands);
-  /// Waits until the swapchain has an image to draw into, so what is drawn next is picked after
-  /// the wait rather than before it. Throws GpuError when the wait fails.
-  void waitForImage();
-  /// The frames the CPU may record ahead of the GPU and display, 1 to 3 (SDL's default is 2);
-  /// fewer is less latency. Waits for the GPU to go idle.
-  void framesInFlight(std::uint32_t frames);
 
 private:
   void release() noexcept;
