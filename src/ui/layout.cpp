@@ -126,7 +126,8 @@ std::vector<float> Row::widths(LayoutContext &context, float width) {
 }
 
 bool Row::stacked(const Theme &theme, float width) const {
-  return stackBelowDp_ && width < theme.px(*stackBelowDp_);
+  // Less than half a pixel short is scaling's rounding, not a narrower screen.
+  return stackBelowDp_ && width + 0.5f < theme.px(*stackBelowDp_);
 }
 
 void Row::arrangeStacked(LayoutContext &context, const Rect &area) {

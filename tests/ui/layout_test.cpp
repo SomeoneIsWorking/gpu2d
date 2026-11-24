@@ -234,11 +234,27 @@ void spatialFocusTouchingIsNotOverlapping() {
 
 } // namespace
 
+void rowAtItsThresholdStaysBeside() {
+  Layout layout;
+  layout.theme.scale = 1.45f;
+  ui::Column root;
+  root.pad(ui::Insets{21.0f, 21.0f, 21.0f, 0.0f});
+  ui::Row &row = root.add<ui::Row>();
+  row.stackBelow(574.0f).space(14.0f);
+  row.grow();
+  row.add<ui::Spacer>(0.0f).fixWidth(220.0f).fixHeight(40.0f);
+  ui::Widget &second = row.add<ui::Spacer>(1.0f).fixWidth(340.0f);
+  root.arrange(layout.context, Rect{0.0f, 0.0f, 1.45f * 616.0f, 400.0f});
+  expect(second.frame().x > 300.0f,
+         "a row its threshold wide after scaling keeps its children beside");
+}
+
 int main() {
   fittingKeepsCharactersWhole();
   columnStacksAndSharesSpareRoom();
   rowGivesFixedNaturalThenGrowing();
   narrowRowStacks();
+  rowAtItsThresholdStaysBeside();
   shortStackShares();
   gridAndCentre();
   scrollViewClampsItsOffset();
