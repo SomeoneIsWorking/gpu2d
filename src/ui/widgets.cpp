@@ -682,12 +682,6 @@ bool Choice::act(Action action, ActContext &context) {
     return false;
   }
   switch (action) {
-  case Action::Left:
-    stepBy(-1, context);
-    return true;
-  case Action::Right:
-    stepBy(1, context);
-    return true;
   case Action::Accept:
     openList(context);
     return true;
@@ -712,8 +706,7 @@ bool Choice::press(Point at, ActContext &context) {
 }
 
 std::vector<Hint> Choice::hints() const {
-  std::vector<Hint> hints{Hint{{Action::Left, Action::Right}, "Change"},
-                          Hint{{Action::Accept}, "Choose"}};
+  std::vector<Hint> hints{Hint{{Action::Accept}, "Choose"}};
   addExtraHints(hints);
   return hints;
 }

@@ -746,8 +746,14 @@ bool Navigator::move(Entry &entry, Direction direction) {
     });
   }
   if (!picked) {
-    picked = nearest([](const Focusable & /*item*/) {
-      return true;
+    // Up or Down out of a list goes only to what stands above or below it, never to a column
+    // beside it; past its end it scrolls, then goes round.
+    const Rect at = here->widget->frame();
+    const bool vertical = direction == Direction::Up || direction == Direction::Down;
+    const bool inList = !here->groups.empty();
+    picked = nearest([&](const Focusable &item) {
+      const Rect box = item.widget->frame();
+      return !vertical || !inList || (box.x < at.right() && at.x < box.right());
     });
   }
   if (!picked) {
@@ -781,6 +787,52 @@ bool Navigator::move(Entry &entry, Direction direction) {
     break;
   }
   focusOn(entry, target, false);
+  return true;
+}
+
+bool Navigator::wrap(Entry &entry, Direction direction) {
+  ViewState &view = entry.screen->view();
+  const std::vector<Focusable> items = focusables(*entry.root, viewport_);
+  const auto here = std::ranges::find_if(items, [&view](const Focusable &item) {
+    return item.widget->id() == view.focused;
+  });
+  if (here == items.end()) {
+    return false;
+  }
+  Widget *const list = here->groups.empty() ? nullptr : here->groups.back();
+  std::vector<Rect> boxes;
+  std::vector<std::size_t> indexes;
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    const bool inList = list == nullptr ? items[i].groups.empty()
+                                        : !items[i].groups.empty() && items[i].groups.back() == list;
+    if (items[i].widget != here->widget && inList) {
+      boxes.push_back(items[i].widget->frame());
+      indexes.push_back(i);
+    }
+  }
+  if (boxes.empty()) {
+    return false;
+  }
+  // The focus put just past the list's far end, so the nearest that way is its first in line.
+  Rect from = here->widget->frame();
+  if (direction == Direction::Down) {
+    float top = from.y;
+    for (const Rect &box : boxes) {
+      top = std::min(top, box.y);
+    }
+    from.y = top - from.height - 1.0f;
+  } else {
+    float bottom = from.bottom();
+    for (const Rect &box : boxes) {
+      bottom = std::max(bottom, box.bottom());
+    }
+    from.y = bottom + 1.0f;
+  }
+  const std::optional<std::size_t> picked = nearestInDirection(boxes, from, direction);
+  if (!picked) {
+    return false;
+  }
+  focusOn(entry, items[indexes[*picked]].widget->id(), false);
   return true;
 }
 
@@ -844,10 +896,12 @@ bool Navigator::act(Action action) {
   if (!handled) {
     switch (action) {
     case Action::Up:
-      handled = move(*entry, Direction::Up) || nudge(*entry, -1);
+      handled = move(*entry, Direction::Up) || nudge(*entry, -1) ||
+                wrap(*entry, Direction::Up);
       break;
     case Action::Down:
-      handled = move(*entry, Direction::Down) || nudge(*entry, 1);
+      handled = move(*entry, Direction::Down) || nudge(*entry, 1) ||
+                wrap(*entry, Direction::Down);
       break;
     case Action::Left:
       handled = move(*entry, Direction::Left);

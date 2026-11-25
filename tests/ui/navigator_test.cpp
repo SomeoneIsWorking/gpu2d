@@ -567,6 +567,53 @@ void contextAndWheelReachTheFocusedWidget() {
 }
 } // namespace
 
+void upAndDownGoRoundAListsEnds() {
+  test::Rig rig;
+  rig.navigator.push(std::make_unique<Pages>(3));
+  rig.frame(1.0);
+  rig.navigator.act(Action::Up);
+  expect(rig.navigator.focused() == "tabs/three", "Up from the first tab goes round to the last");
+  rig.navigator.act(Action::Down);
+  expect(rig.navigator.focused() == "tabs/one", "and Down from the last back to the first");
+  rig.navigator.act(Action::Right);
+  rig.navigator.act(Action::Up);
+  expect(rig.navigator.focused() == "row2", "Up from the first row goes to the last");
+  rig.navigator.act(Action::Down);
+  expect(rig.navigator.focused() == "row0", "Down from the last row to the first");
+  rig.navigator.act(Action::Left);
+  expect(rig.navigator.focused() == "tabs/one", "Left still leaves the list");
+}
+
+void downPastAListBesideTabsStaysInIt() {
+  test::Rig rig;
+  auto owned = std::make_unique<Pages>(3);
+  Pages &pages = *owned;
+  pages.first = 0;
+  rig.navigator.push(std::move(owned));
+  rig.frame(1.0);
+  rig.navigator.focus("tabs/three");
+  rig.frame(1.0);
+  rig.navigator.focus("row2");
+  rig.navigator.act(Action::Down);
+  expect(rig.navigator.focused() == "row0",
+         "Down from the last row goes round, not to the tab below and beside it");
+}
+
+void downPastAScrolledListsEndScrollsBeforeItGoesRound() {
+  test::Rig rig;
+  rig.navigator.push(std::make_unique<TopTabs>());
+  rig.frame(1.0);
+  expect(rig.navigator.focus("row29"), "focus starts on the last row");
+  rig.frame(1.0);
+  rig.frame(1.0);
+  rig.navigator.act(Action::Down);
+  rig.frame(1.0);
+  rig.frame(1.0);
+  expect(rig.navigator.focused() == "row0", "Down from the last row goes round to the first");
+  rig.navigator.act(Action::Up);
+  expect(rig.navigator.focused() == "tabs/one", "Up from the first row reaches the tabs above");
+}
+
 int main() {
   opensOnTheFirstFocusableAndMovesSpatially();
   focusIsKeptByIdAcrossRebuilds();
@@ -582,6 +629,9 @@ int main() {
   ringFollowsTheFocus();
   downPastTheLastFocusableScrolls();
   upInAListReachesTheRowOutOfSightBeforeTheTabs();
+  upAndDownGoRoundAListsEnds();
+  downPastAListBesideTabsStaysInIt();
+  downPastAScrolledListsEndScrollsBeforeItGoesRound();
   anOverlayNamesItsPromptsOnTheBarBelow();
   overlaysStandAboveACoveredStrip();
   focusAskedWhileHandlingInputWaits();

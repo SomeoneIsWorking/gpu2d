@@ -207,14 +207,17 @@ void toggleFlipsOnA() {
   expect(!f.board->on, "A turns it off again");
 }
 
-void choiceStepsAndOpensAList() {
+void choiceOpensAListAndLeavesLeftAndRightToTheFocus() {
   Fixture f;
   f.rig.navigator.focus("choice");
   f.rig.navigator.act(Action::Right);
-  expect(f.board->chosen == 1, "Right steps to the next option");
+  f.rig.navigator.focus("choice");
   f.rig.navigator.act(Action::Left);
-  f.rig.navigator.act(Action::Left);
-  expect(f.board->chosen == 2, "Left from the first wraps to the last");
+  expect(f.board->chosen == 0, "Left and Right leave a choice alone");
+  f.rig.navigator.focus("choice");
+  expect(f.rig.navigator.hints().front().label == "Choose", "its prompt says A chooses");
+  f.board->chosen = 2;
+  f.rig.frame();
   f.rig.navigator.act(Action::Accept);
   expect(f.rig.navigator.top()->id() == "choice" && f.rig.navigator.focused() == "choice/2",
          "A opens the options as a list on the one chosen");
@@ -729,7 +732,7 @@ void toastComesAndGoes() {
 int main() {
   headingsAndFactsTakeNoFocus();
   toggleFlipsOnA();
-  choiceStepsAndOpensAList();
+  choiceOpensAListAndLeavesLeftAndRightToTheFocus();
   choicePressesStepOrOpen();
   sliderAdjustsOnlyWhileHeld();
   sliderTakesPresses();

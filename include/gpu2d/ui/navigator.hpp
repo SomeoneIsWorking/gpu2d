@@ -6,7 +6,8 @@
 // types back through `text` and `act`. The app's chrome (a top bar, a docked keyboard) are
 // screens outside the stack that the pointer reaches first and the app draws where it likes.
 // Pushes and pops fade and slide on the toolkit's clock, which the app sets each frame; the
-// focus ring eases between widgets and scroll views ease the focus into view.
+// focus ring eases between widgets and scroll views ease the focus into view. Up or Down past a
+// list's end goes round to its other end.
 #pragma once
 
 #include <cstdint>
@@ -210,6 +211,8 @@ private:
   /// Scrolls the view holding the focus (with none, the first that scrolls) `rows` rows, for
   /// what lies past the last widget that takes focus.
   bool nudge(Entry &entry, int rows);
+  /// From the end of the list holding the focus, Up or Down goes round to its other end.
+  bool wrap(Entry &entry, Direction direction);
   /// Focuses `id` on `entry`; `pointer` when the pointer moved it.
   void focusOn(Entry &entry, const std::string &id, bool pointer);
   /// Scrolls every view holding the focused widget so it shows.

@@ -8,7 +8,8 @@
 // - TextField: typed text goes in at the end, Erase takes the last character off, Y clears it and
 //   Submit is done; A asks the app's on-screen keyboard to type into it.
 // - Toggle: A flips it.
-// - Choice: Left and Right step through its options; A opens them as a list.
+// - Choice: A opens its options as a list, Left and Right moving the focus as on any row (so Left
+//   goes back to what led to it); a press on a chevron steps it.
 // - Slider: focused, it is a row like any other, Left and Right moving the focus; A or a press on
 //   the row starts adjusting it, Left and Right then step it, A ends that keeping the level and
 //   Back ends it putting back the level it began with; a press on the track sets it and adjusts.
