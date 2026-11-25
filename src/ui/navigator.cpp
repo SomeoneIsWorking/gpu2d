@@ -738,15 +738,13 @@ bool Navigator::move(Entry &entry, Direction direction) {
     return picked ? std::optional<std::size_t>{indexes[*picked]} : std::nullopt;
   };
   // The innermost group around the focus with something that way wins: a row scrolled out of
-  // sight comes before what lies past the list's edge. Up or Down out of a list goes only to what
-  // stands above or below it, never to a column beside it; past its end it scrolls, then goes round.
+  // sight comes before what lies past the list's edge. Up or Down goes only to what stands above or
+  // below, never to a column beside it; past the column's end it scrolls, then goes round.
   const Rect at = here->widget->frame();
   const bool vertical = direction == Direction::Up || direction == Direction::Down;
-  Widget *const list = here->groups.empty() ? nullptr : here->groups.back();
   const auto inLine = [&](const Focusable &item) {
     const Rect box = item.widget->frame();
-    const bool sameList = list != nullptr && !item.groups.empty() && item.groups.back() == list;
-    return !vertical || list == nullptr || sameList || (box.x < at.right() && at.x < box.right());
+    return !vertical || (box.x < at.right() && at.x < box.right());
   };
   std::optional<std::size_t> picked;
   for (auto group = here->groups.rbegin(); group != here->groups.rend() && !picked; ++group) {
@@ -800,14 +798,18 @@ bool Navigator::wrap(Entry &entry, Direction direction) {
   if (here == items.end()) {
     return false;
   }
+  // The column: what shares the focus's innermost group and stands above or below it.
   Widget *const list = here->groups.empty() ? nullptr : here->groups.back();
+  const Rect at = here->widget->frame();
   std::vector<Rect> boxes;
   std::vector<std::size_t> indexes;
   for (std::size_t i = 0; i < items.size(); ++i) {
+    const Rect box = items[i].widget->frame();
     const bool inList = list == nullptr ? items[i].groups.empty()
                                         : !items[i].groups.empty() && items[i].groups.back() == list;
-    if (items[i].widget != here->widget && inList) {
-      boxes.push_back(items[i].widget->frame());
+    const bool inColumn = box.x < at.right() && at.x < box.right();
+    if (items[i].widget != here->widget && inList && inColumn) {
+      boxes.push_back(box);
       indexes.push_back(i);
     }
   }
