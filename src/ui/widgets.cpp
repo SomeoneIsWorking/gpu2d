@@ -564,7 +564,7 @@ void Item::paintTrailing(Painter &painter, const Rect &area) const {
   }
   if (button_ && !valueShown_.empty()) {
     const float pad = painter.px(theme.spacing.pad);
-    const float height = std::min(area.height, painter.px(buttonHeightDp));
+    const float height = std::min(area.height, painter.px(theme.type.value) * 2.2f);
     const float width = painter.text.measure(valueShown_, painter.px(theme.type.value)) + pad * 2.0f;
     const Rect pill{right - width, centreY - height * 0.5f, width, height};
     painter.canvas.fillRoundRect(pill, height * 0.5f, painter.fade(theme.colours.accent));
