@@ -445,6 +445,9 @@ float Item::trailingWidth(LayoutContext &context, float width) {
     wanted = theme.px(theme.type.value) * 1.2f;
   } else if (!value_.empty()) {
     wanted = context.text.measure(value_, theme.px(theme.type.value));
+    if (button_) {
+      wanted += theme.px(theme.spacing.pad) * 2.0f;
+    }
   }
   if (opens_) {
     wanted += chevronZone(theme);
@@ -557,6 +560,16 @@ void Item::paintTrailing(Painter &painter, const Rect &area) const {
   if (marked_) {
     const float box = painter.px(theme.type.value);
     tick(painter, Rect{right - box, centreY - box * 0.5f, box, box}, theme.colours.accent);
+    return;
+  }
+  if (button_ && !valueShown_.empty()) {
+    const float pad = painter.px(theme.spacing.pad);
+    const float height = std::min(area.height, painter.px(buttonHeightDp));
+    const float width = painter.text.measure(valueShown_, painter.px(theme.type.value)) + pad * 2.0f;
+    const Rect pill{right - width, centreY - height * 0.5f, width, height};
+    painter.canvas.fillRoundRect(pill, height * 0.5f, painter.fade(theme.colours.accent));
+    painter.labelEndingAt(valueShown_, Point{right - pad, centreY}, theme.type.value,
+                          theme.colours.onAccent);
     return;
   }
   painter.labelEndingAt(valueShown_, Point{right, centreY}, theme.type.value,

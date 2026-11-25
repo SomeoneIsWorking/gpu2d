@@ -5,6 +5,7 @@
 // - Item (a settings row: title, subtitle, value, an optional chip naming where the value comes
 //   from): A presses it when it does something; one with nothing to do is not focusable. X and Y
 //   do the row's second and third actions when it has them, on every kind of row.
+//   A row whose A does its value's word draws that word as a button.
 // - TextField: typed text goes in at the end, Erase takes the last character off, Y clears it and
 //   Submit is done; A asks the app's on-screen keyboard to type into it.
 // - Toggle: A flips it.
@@ -233,6 +234,11 @@ public:
     extras_.push_back(Extra{key, std::move(action), std::move(verb)});
     return *this;
   }
+  /// Draws the value as a button at its end, for a row whose A does that word ("Allow", "Open").
+  Item &asButton(bool button = true) noexcept {
+    button_ = button;
+    return *this;
+  }
   /// Puts a tick at its end: the option chosen in a list.
   Item &mark(bool marked = true) noexcept {
     marked_ = marked;
@@ -297,6 +303,7 @@ private:
   };
   std::optional<Confirm> confirm_;
   bool marked_{false};
+  bool button_{false};
   bool disabled_{false};
   std::string chip_;
   bool chipStrong_{false};
