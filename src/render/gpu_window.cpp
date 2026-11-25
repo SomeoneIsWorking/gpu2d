@@ -36,6 +36,8 @@ SDL_GPUDevice *openDevice(bool dmabuf) {
   const SDL_PropertiesID props = SDL_CreateProperties();
   const SDL_GPUShaderFormat formats = builtShaderFormats();
   SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, gpuDriver);
+  // SDL defaults to debug mode, which loads the Vulkan validation layer wherever it is installed.
+  SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
   SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,
                          (formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0);
   SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN,
