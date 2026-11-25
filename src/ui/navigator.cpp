@@ -738,23 +738,24 @@ bool Navigator::move(Entry &entry, Direction direction) {
     return picked ? std::optional<std::size_t>{indexes[*picked]} : std::nullopt;
   };
   // The innermost group around the focus with something that way wins: a row scrolled out of
-  // sight comes before what lies past the list's edge.
+  // sight comes before what lies past the list's edge. Up or Down out of a list goes only to what
+  // stands above or below it, never to a column beside it; past its end it scrolls, then goes round.
+  const Rect at = here->widget->frame();
+  const bool vertical = direction == Direction::Up || direction == Direction::Down;
+  Widget *const list = here->groups.empty() ? nullptr : here->groups.back();
+  const auto inLine = [&](const Focusable &item) {
+    const Rect box = item.widget->frame();
+    const bool sameList = list != nullptr && !item.groups.empty() && item.groups.back() == list;
+    return !vertical || list == nullptr || sameList || (box.x < at.right() && at.x < box.right());
+  };
   std::optional<std::size_t> picked;
   for (auto group = here->groups.rbegin(); group != here->groups.rend() && !picked; ++group) {
-    picked = nearest([group](const Focusable &item) {
-      return std::ranges::find(item.groups, *group) != item.groups.end();
+    picked = nearest([group, &inLine](const Focusable &item) {
+      return std::ranges::find(item.groups, *group) != item.groups.end() && inLine(item);
     });
   }
   if (!picked) {
-    // Up or Down out of a list goes only to what stands above or below it, never to a column
-    // beside it; past its end it scrolls, then goes round.
-    const Rect at = here->widget->frame();
-    const bool vertical = direction == Direction::Up || direction == Direction::Down;
-    const bool inList = !here->groups.empty();
-    picked = nearest([&](const Focusable &item) {
-      const Rect box = item.widget->frame();
-      return !vertical || !inList || (box.x < at.right() && at.x < box.right());
-    });
+    picked = nearest(inLine);
   }
   if (!picked) {
     return false;
