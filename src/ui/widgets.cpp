@@ -664,25 +664,12 @@ float Choice::trailingWidth(LayoutContext &context, float width) {
   for (const std::string &option : options_) {
     widest = std::max(widest, context.text.measure(option, theme.px(theme.type.value)));
   }
-  const float chevrons = chevronZone(theme) * 2.0f;
-  const float end = std::min(widest + chevrons, endRoom(context, width));
-  shown_ = chosen_ < options_.size() ? fittedBeside(context.text, options_[chosen_], end, chevrons,
+  const float chevron = chevronZone(theme);
+  const float end = std::min(widest + chevron, endRoom(context, width));
+  shown_ = chosen_ < options_.size() ? fittedBeside(context.text, options_[chosen_], end, chevron,
                                                     theme.px(theme.type.value))
                                      : std::string{};
   return end;
-}
-
-void Choice::stepBy(int step, ActContext &context) {
-  if (options_.empty()) {
-    return;
-  }
-  const auto count = static_cast<long>(options_.size());
-  const long next = ((static_cast<long>(chosen_) + step) % count + count) % count;
-  chosen_ = static_cast<std::size_t>(next);
-  context.sound(Sound::Move);
-  if (changed_) {
-    changed_(chosen_);
-  }
 }
 
 void Choice::openList(ActContext &context) {
@@ -703,18 +690,11 @@ bool Choice::act(Action action, ActContext &context) {
   }
 }
 
-bool Choice::press(Point at, ActContext &context) {
+bool Choice::press(Point /*at*/, ActContext &context) {
   if (!focusable()) {
     return false;
   }
-  const float zone = chevronZone(context.theme());
-  if (at.x >= trailing().x && at.x < trailing().x + zone) {
-    stepBy(-1, context);
-  } else if (at.x >= trailing().right() - zone && at.x < trailing().right() + zone) {
-    stepBy(1, context);
-  } else {
-    openList(context);
-  }
+  openList(context);
   return true;
 }
 
@@ -727,15 +707,14 @@ std::vector<Hint> Choice::hints() const {
 void Choice::paintTrailing(Painter &painter, const Rect &area) const {
   const Theme &theme = painter.theme;
   const float centreY = area.y + area.height * 0.5f;
-  const float zone = painter.px(chevronDp * 2.0f + theme.spacing.gap * 2.0f);
   const bool focused = painter.focused == id();
-  const Colour arrows = focused ? theme.colours.ink : theme.colours.inkFaint;
-  chevron(painter, area.x + painter.px(chevronDp * 0.5f), centreY, -1.0f, arrows);
-  chevron(painter, area.right() - painter.px(chevronDp * 0.5f), centreY, 1.0f, arrows);
+  // A opens the options as a list, so the row ends in the chevron of a row that opens something.
+  chevron(painter, area.right() - painter.px(chevronDp * 0.5f), centreY, 1.0f,
+          focused ? theme.colours.ink : theme.colours.inkMuted);
   const float size = painter.px(theme.type.value);
   const float width = painter.text.measure(shown_, size);
-  const float middle = area.x + zone + (area.width - 2.0f * zone - width) * 0.5f;
-  painter.label(shown_, Point{middle, centreY}, theme.type.value,
+  const float right = area.right() - chevronZone(theme);
+  painter.label(shown_, Point{right - width, centreY}, theme.type.value,
                 focused ? theme.colours.ink : theme.colours.inkMuted);
 }
 

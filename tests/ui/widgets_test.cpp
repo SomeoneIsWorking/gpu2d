@@ -235,13 +235,15 @@ void choiceOpensAListAndLeavesLeftAndRightToTheFocus() {
          "Back closes the list keeping the choice");
 }
 
-void choicePressesStepOrOpen() {
+void choicePressesOpen() {
   Fixture f;
   const Rect row = f.rig.navigator.find("choice")->frame();
   const float pad = f.rig.navigator.theme().px(f.rig.navigator.theme().spacing.pad);
-  const Point right{row.right() - pad - 4.0f, row.y + row.height * 0.5f};
-  f.rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press, right, 0.0f});
-  expect(f.board->chosen == 1, "a press on the right chevron steps forward");
+  const Point end{row.right() - pad - 4.0f, row.y + row.height * 0.5f};
+  f.rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press, end, 0.0f});
+  expect(f.board->chosen == 0 && f.rig.navigator.top()->id() == "choice",
+         "a press on its chevron opens the list, never steps");
+  f.rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press, Point{2.0f, 2.0f}, 0.0f});
   f.rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press, f.centreOf("choice"), 0.0f});
   expect(f.rig.navigator.top()->id() == "choice", "a press on the row opens the list");
   f.rig.navigator.pointer(ui::PointerEvent{ui::PointerKind::Press, Point{2.0f, 2.0f}, 0.0f});
@@ -717,7 +719,7 @@ void valueThatSetsTheEndShowsWhole() {
                     [](std::size_t /*index*/) {
                     }};
   choice.arrange(context, Rect{0.0f, 0.0f, 900.0f, 60.0f});
-  expect(text.cuts == 0, "nor is the widest choice between its chevrons");
+  expect(text.cuts == 0, "nor is the widest choice beside its chevron");
 }
 
 void toastComesAndGoes() {
@@ -733,7 +735,7 @@ int main() {
   headingsAndFactsTakeNoFocus();
   toggleFlipsOnA();
   choiceOpensAListAndLeavesLeftAndRightToTheFocus();
-  choicePressesStepOrOpen();
+  choicePressesOpen();
   sliderAdjustsOnlyWhileHeld();
   sliderTakesPresses();
   buttonAndHintBarPress();
