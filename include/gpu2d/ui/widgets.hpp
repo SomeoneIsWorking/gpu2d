@@ -89,6 +89,10 @@ public:
   [[nodiscard]] std::vector<Hint> hints() const override;
   void paint(Painter &painter) const override;
 
+protected:
+  /// The pill and its outline, without the label; returns the label's ink.
+  Colour paintFace(const Painter &painter) const;
+
 private:
   std::string label_;
   std::function<void()> pressed_;

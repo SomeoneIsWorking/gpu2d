@@ -200,7 +200,7 @@ std::vector<Hint> Button::hints() const {
   return {Hint{{Action::Accept}, label_}};
 }
 
-void Button::paint(Painter &painter) const {
+Colour Button::paintFace(const Painter &painter) const {
   const Theme &theme = painter.theme;
   const bool focused = painter.focused == id() && !id().empty();
   Colour fill = focused ? theme.colours.controlFocused : theme.colours.control;
@@ -217,6 +217,12 @@ void Button::paint(Painter &painter) const {
     painter.canvas.strokeRoundRect(frame_, frame_.height * 0.5f, painter.px(theme.shape.outline),
                                    painter.fade(theme.colours.track));
   }
+  return ink;
+}
+
+void Button::paint(Painter &painter) const {
+  const Theme &theme = painter.theme;
+  const Colour ink = paintFace(painter);
   const float size = painter.px(theme.type.body);
   const std::string shown =
       fitted(painter.text, label_, frame_.width - painter.px(theme.spacing.pad), size);
@@ -565,7 +571,8 @@ void Item::paintTrailing(Painter &painter, const Rect &area) const {
   if (button_ && !valueShown_.empty()) {
     const float pad = painter.px(theme.spacing.pad);
     const float height = std::min(area.height, painter.px(theme.type.value) * 2.2f);
-    const float width = painter.text.measure(valueShown_, painter.px(theme.type.value)) + pad * 2.0f;
+    const float width =
+        painter.text.measure(valueShown_, painter.px(theme.type.value)) + pad * 2.0f;
     const Rect pill{right - width, centreY - height * 0.5f, width, height};
     painter.canvas.fillRoundRect(pill, height * 0.5f, painter.fade(theme.colours.accent));
     painter.labelEndingAt(valueShown_, Point{right - pad, centreY}, theme.type.value,
